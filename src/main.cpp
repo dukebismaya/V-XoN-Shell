@@ -139,8 +139,9 @@ auto run_program(std::string &command) -> bool {
   return true;
 }
 
-auto parse_cd(const std::string &command) -> void {
-  if (command == "cd") {
+auto parse_cd(std::string &command) -> void {
+  filter_command(command, 2);
+  if (command.empty()) {
     if (fs::exists(HOME_DIR)) {
       fs::current_path(HOME_DIR);
     }
@@ -150,7 +151,12 @@ auto parse_cd(const std::string &command) -> void {
   std::string curr_arg;
 
   // we only need 1st arg rest discard
+
   cmd >> curr_arg;
+  auto find_arsenic_pos = curr_arg.find("~");
+  if (find_arsenic_pos != std::string::npos) {
+    curr_arg.replace(find_arsenic_pos, 1, HOME_DIR);
+  }
   if (fs::exists(curr_arg) && fs::is_directory(curr_arg)) {
     fs::current_path(curr_arg);
   } else {
@@ -177,7 +183,7 @@ int main() {
     if (command == "exit" || command.starts_with("exit "))
       std::exit(0);
 
-    if (command.starts_with("cd")) {
+    if (command == "cd" || command.starts_with("cd ")) {
       parse_cd(command);
       continue;
     }
