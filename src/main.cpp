@@ -2,6 +2,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <format>
+#include <fstream>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -42,12 +43,44 @@ auto filter_command(std::string &command, size_t step_trim) -> void {
   command.resize(curr_idx);
 }
 
-auto parse_echo(std::string &command) -> std::string {
-  filter_command(command, 4);
-  if (command.starts_with("SHELL"))
-    return "V-XoN Shell(v0.0.1)\nCopyright(C)2026 By Bismaya All rights "
-           "reserved.";
-  return command;
+auto parse_args(std::string &raw_command) -> std::vector<std::string> {
+  std::vector<std::string> args;
+  std::string curr_arg;
+  bool isInQuote = false;
+  bool hasChars = false;
+  for (size_t i = 0; i < raw_command.length(); ++i) {
+    char c = raw_command[i];
+    if (c == '\'') {
+      isInQuote = !isInQuote;
+      hasChars = true;
+    } else if (isInQuote) {
+      curr_arg += c;
+      hasChars = true;
+    } else if (c == ' ' || c == '\t' || c == '\n') {
+      if (hasChars) {
+        args.push_back(curr_arg);
+        curr_arg.clear();
+        hasChars = false;
+      }
+    } else {
+      curr_arg += c;
+      hasChars = true;
+    }
+  }
+  if (hasChars)
+    args.push_back(curr_arg);
+  return args;
+}
+
+auto parse_echo(std::vector<std::string> &args) -> std::string {
+  std::string output;
+  for (auto &arg : args) {
+    output += std::move(arg);
+    if (args.size() != 1) {
+      output += " ";
+    }
+  }
+  return output;
 }
 
 auto find_executable(const std::string &command) -> std::string {
@@ -86,32 +119,54 @@ auto parse_type(std::string &command) -> std::string {
   return std::format("{}: not found", command);
 }
 
-auto pwd(std::string &command) -> bool {
-  filter_command(command, 0);
-  if (command != "pwd") {
-    return false;
-  }
+auto pwd() -> bool {
   fs::path curr_path = fs::current_path();
   std::cout << std::format("{}\n", curr_path.string());
   return true;
 }
 
-auto run_program(std::string &command) -> bool {
+auto run_program(std::string &cmd_name, std::vector<std::string> &args)
+    -> bool {
 
-  std::stringstream cmd(command);
-  std::string curr_cmd;
-  cmd >> curr_cmd;
+  if (cmd_name == "pwd")
+    return pwd();
 
-  std::string exec_path = find_executable(curr_cmd);
+#if defined(_WIN32) || defined(_WIN64)
+  if (cmd_name == "cat") {
+    for (const auto &filepath : args) {
+      std::ifstream file(filepath);
+      if (!file.is_open()) {
+        std::cerr << "cat: " << filepath << ": No such file or directory\n";
+        continue;
+      }
+      std::string line;
+      while (std::getline(file, line)) {
+        std::cout << line << "\n";
+      }
+    }
+    return true;
+  }
+
+  std::string win_cmd = cmd_name;
+  for (auto &arg : args) {
+    std::string fixed_arg = arg;
+    std::replace(fixed_arg.begin(), fixed_arg.end(), '/', '\\');
+    win_cmd += " ";
+    if (fixed_arg.find(' ') != std::string::npos)
+      win_cmd += "\"" + fixed_arg + "\"";
+    else
+      win_cmd += fixed_arg;
+  }
+  std::system(win_cmd.c_str());
+#else
+  std::string exec_path = find_executable(cmd_name);
   if (exec_path.empty())
     return false;
 
   std::vector<std::string> build_args;
-  build_args.push_back(curr_cmd); // first arg -> command/executable name
-
-  std::string curr_arg;
-  while (cmd >> curr_arg) {
-    build_args.push_back(curr_arg);
+  build_args.push_back(cmd_name);
+  for (auto &arg : args) {
+    build_args.push_back(std::move(arg));
   }
 
   std::vector<char *> c_args;
@@ -120,9 +175,6 @@ auto run_program(std::string &command) -> bool {
   }
   c_args.push_back(nullptr);
 
-#if defined(_WIN32) || defined(_WIN64)
-  std::system(command.c_str());
-#else
   pid_t pid = fork();
   if (pid < 0) {
     return false;
@@ -135,7 +187,6 @@ auto run_program(std::string &command) -> bool {
     waitpid(pid, &status, 0);
   }
 #endif
-
   return true;
 }
 
@@ -150,7 +201,7 @@ auto parse_cd(std::string &command) -> void {
   std::stringstream cmd(command);
   std::string curr_arg;
 
-  // we only need 1st arg rest discard
+  // only need 1st arg rest discard
 
   cmd >> curr_arg;
   auto find_arsenic_pos = curr_arg.find("~");
@@ -168,27 +219,32 @@ auto parse_cd(std::string &command) -> void {
 int main() {
   std::cout << std::unitbuf;
   std::cerr << std::unitbuf;
-  std::string command{};
+  std::string raw_command{};
+
   while (true) {
     std::cout << "$ ";
-    std::getline(std::cin, command);
-    if (command == "echo" || command.starts_with("echo ")) {
-      std::cout << parse_echo(command) << std::endl;
+    std::getline(std::cin, raw_command);
+    auto args = parse_args(raw_command);
+    std::string get_type = args[0];
+    args.erase(args.begin());
+
+    if (get_type == "echo") {
+      std::cout << parse_echo(args) << std::endl;
       continue;
     }
-    if (command.starts_with("type ")) {
-      std::cout << parse_type(command) << std::endl;
+    if (get_type == "type") {
+      std::cout << parse_type(raw_command) << std::endl;
       continue;
     }
-    if (command == "exit" || command.starts_with("exit "))
+    if (get_type == "exit")
       std::exit(0);
 
-    if (command == "cd" || command.starts_with("cd ")) {
-      parse_cd(command);
+    if (get_type == "cd") {
+      parse_cd(raw_command);
       continue;
     }
 
-    if (!run_program(command) && !(pwd(command)))
-      std::cout << std::format("{}: command not found\n", command);
+    if (!run_program(get_type, args))
+      std::cout << std::format("{}: command not found\n", get_type);
   }
 }
