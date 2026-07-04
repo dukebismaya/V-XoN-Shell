@@ -1,2 +1,3 @@
 # V-XoN-Shell
-a SHELL developed using c++
+In Development - Please wait for the final release.
+Version Used for Developement: c++23
