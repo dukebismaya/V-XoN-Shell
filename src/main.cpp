@@ -46,14 +46,18 @@ auto filter_command(std::string &command, size_t step_trim) -> void {
 auto parse_args(std::string &raw_command) -> std::vector<std::string> {
   std::vector<std::string> args;
   std::string curr_arg;
-  bool isInQuote = false;
+  bool in_single_quote = false;
+  bool in_double_quote = false;
   bool hasChars = false;
   for (size_t i = 0; i < raw_command.length(); ++i) {
     char c = raw_command[i];
-    if (c == '\'') {
-      isInQuote = !isInQuote;
+    if (c == '\"' && !in_single_quote) {
+      in_double_quote = !in_double_quote;
       hasChars = true;
-    } else if (isInQuote) {
+    } else if (c == '\'' && !in_double_quote) {
+      in_single_quote = !in_single_quote;
+      hasChars = true;
+    } else if (in_single_quote || in_double_quote) {
       curr_arg += c;
       hasChars = true;
     } else if (c == ' ' || c == '\t' || c == '\n') {
@@ -62,6 +66,8 @@ auto parse_args(std::string &raw_command) -> std::vector<std::string> {
         curr_arg.clear();
         hasChars = false;
       }
+    } else if (c == '\\') {
+      curr_arg += raw_command[++i];
     } else {
       curr_arg += c;
       hasChars = true;
@@ -74,11 +80,10 @@ auto parse_args(std::string &raw_command) -> std::vector<std::string> {
 
 auto parse_echo(std::vector<std::string> &args) -> std::string {
   std::string output;
-  for (auto &arg : args) {
-    output += std::move(arg);
-    if (args.size() != 1) {
+  for (size_t i = 0; i < args.size(); ++i) {
+    output += args[i];
+    if (i < args.size() - 1)
       output += " ";
-    }
   }
   return output;
 }
