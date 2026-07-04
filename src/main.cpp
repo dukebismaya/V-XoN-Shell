@@ -11,11 +11,13 @@
 #if defined(_WIN32) || defined(_WIN64)
 constexpr char PATH_DELIMITER = ';';
 const char *HOME_DIR = std::getenv("USERPROFILE");
+const char *USER_NAME = std::getenv("USERNAME");
 #else
 constexpr char PATH_DELIMITER = ':';
 #include <sys/wait.h>
 #include <unistd.h>
 const char *HOME_DIR = std::getenv("HOME");
+const char *USER_NAME = std::getenv("USER");
 #endif
 
 namespace fs = std::filesystem;
@@ -227,7 +229,8 @@ int main() {
   std::string raw_command{};
 
   while (true) {
-    std::cout << "$ ";
+    std::cout << std::format("┌──({}@V-Xon)-", USER_NAME) << "["
+              << fs::current_path().string() << "]\n└─$ ";
     std::getline(std::cin, raw_command);
     auto args = parse_args(raw_command);
     std::string get_type = args[0];
