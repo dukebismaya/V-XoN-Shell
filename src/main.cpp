@@ -10,7 +10,6 @@
 #include <unordered_map>
 #include <vector>
 
-
 #if defined(_WIN32) || defined(_WIN64)
 constexpr char PATH_DELIMITER = ';';
 const char *HOME_DIR = std::getenv("USERPROFILE");
@@ -58,38 +57,66 @@ auto parse_args(std::string &raw_command) -> std::vector<std::string> {
   bool hasChars = false;
   for (size_t i = 0; i < raw_command.length(); ++i) {
     char c = raw_command[i];
+
     if (c == '\\') {
+
       if (in_double_quote) {
+
         if (i + 1 < raw_command.length() &&
             check_escape.count(raw_command[i + 1])) {
           curr_arg += raw_command[++i];
         } else {
           curr_arg += c;
         }
-      } else {
+      }
+
+      else {
         if (in_single_quote) {
           curr_arg += c;
         } else if (i + 1 < raw_command.length()) {
           curr_arg += raw_command[++i];
         }
       }
+
       hasChars = true;
-    } else if (c == '\"' && !in_single_quote) {
+    }
+
+    else if (c == '\"' && !in_single_quote) {
       in_double_quote = !in_double_quote;
       hasChars = true;
-    } else if (c == '\'' && !in_double_quote) {
+    }
+
+    else if (c == '\'' && !in_double_quote) {
       in_single_quote = !in_single_quote;
       hasChars = true;
-    } else if (in_single_quote || in_double_quote) {
+    }
+
+    else if (in_single_quote || in_double_quote) {
       curr_arg += c;
       hasChars = true;
-    } else if (c == ' ' || c == '\t' || c == '\n') {
+    }
+
+    else if (c == ' ' || c == '\t' || c == '\n') {
       if (hasChars) {
         args.push_back(curr_arg);
         curr_arg.clear();
         hasChars = false;
       }
-    } else {
+    }
+
+    else if (c == '>' || (c == '1' && i + 1 < raw_command.length() &&
+                          raw_command[i + 1] == '>')) {
+      if (hasChars) {
+        args.push_back(curr_arg);
+        curr_arg.clear();
+        if (c == '1') {
+          i++;
+        }
+        args.push_back(">");
+      }
+    }
+
+    else {
       curr_arg += c;
       hasChars = true;
     }
@@ -102,11 +129,17 @@ auto parse_args(std::string &raw_command) -> std::vector<std::string> {
 auto parse_echo(std::vector<std::string> &args) -> std::string {
   std::string output;
   for (size_t i = 0; i < args.size(); ++i) {
+    if (args[i] == ">") {
+      if (i + 1 < args.size()) {
+        redirect_output(output, args[i + 1]);
+      }
+      return "\n";
+    }
     output += args[i];
-    if (i < args.size() - 1)
+    if (i + 1 < args.size() && args[i + 1] != ">")
       output += " ";
   }
-  return output;
+  return output + "\n";
 }
 
 auto find_executable(const std::string &command) -> std::string {
@@ -261,11 +294,11 @@ int main() {
     args.erase(args.begin());
 
     if (get_type == "echo") {
-      std::cout << parse_echo(args) << std::endl;
+      std::cout << parse_echo(args);
       continue;
     }
     if (get_type == "type") {
-      std::cout << parse_type(raw_command) << std::endl;
+      std::cout << parse_type(raw_command);
       continue;
     }
     if (get_type == "exit")
