@@ -1,3 +1,4 @@
+#include "extensions/redirection.h"
 #include <algorithm>
 #include <cstdlib>
 #include <filesystem>
@@ -6,22 +7,29 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #if defined(_WIN32) || defined(_WIN64)
 constexpr char PATH_DELIMITER = ';';
 const char *HOME_DIR = std::getenv("USERPROFILE");
+const char *USER_NAME = std::getenv("USERNAME");
 #else
 constexpr char PATH_DELIMITER = ':';
+#include <fcntl.h>
 #include <sys/wait.h>
 #include <unistd.h>
+
 const char *HOME_DIR = std::getenv("HOME");
+const char *USER_NAME = std::getenv("USER");
 #endif
 
 namespace fs = std::filesystem;
 
 const std::vector<std::string> shell_builtins{"cd", "echo", "exit", "type",
                                               "pwd"};
+const std::unordered_map<char, bool> check_escape{
+    {'"', true}, {'\\', true}, {'\n', true}, {'$', true}, {'`', true}};
 
 auto filter_command(std::string &command, size_t step_trim) -> void {
   size_t curr_idx = 0;
@@ -51,24 +59,67 @@ auto parse_args(std::string &raw_command) -> std::vector<std::string> {
   bool hasChars = false;
   for (size_t i = 0; i < raw_command.length(); ++i) {
     char c = raw_command[i];
-    if (c == '\"' && !in_single_quote) {
+
+    if (c == '\\') {
+
+      if (in_double_quote) {
+
+        if (i + 1 < raw_command.length() &&
+            check_escape.count(raw_command[i + 1])) {
+          curr_arg += raw_command[++i];
+        } else {
+          curr_arg += c;
+        }
+      }
+
+      else {
+        if (in_single_quote) {
+          curr_arg += c;
+        } else if (i + 1 < raw_command.length()) {
+          curr_arg += raw_command[++i];
+        }
+      }
+
+      hasChars = true;
+    }
+
+    else if (c == '\"' && !in_single_quote) {
       in_double_quote = !in_double_quote;
       hasChars = true;
-    } else if (c == '\'' && !in_double_quote) {
+    }
+
+    else if (c == '\'' && !in_double_quote) {
       in_single_quote = !in_single_quote;
       hasChars = true;
-    } else if (in_single_quote || in_double_quote) {
+    }
+
+    else if (in_single_quote || in_double_quote) {
       curr_arg += c;
       hasChars = true;
-    } else if (c == ' ' || c == '\t' || c == '\n') {
+    }
+
+    else if (c == ' ' || c == '\t' || c == '\n') {
       if (hasChars) {
         args.push_back(curr_arg);
         curr_arg.clear();
         hasChars = false;
       }
-    } else if (c == '\\') {
-      curr_arg += raw_command[++i];
-    } else {
+    }
+
+    else if (c == '>' || (c == '1' && i + 1 < raw_command.length() &&
+                          raw_command[i + 1] == '>')) {
+      if (hasChars) {
+        args.push_back(curr_arg);
+        curr_arg.clear();
+        hasChars = false;
+      }
+      if (c == '1') {
+        i++;
+      }
+      args.push_back(">");
+    }
+
+    else {
       curr_arg += c;
       hasChars = true;
     }
@@ -81,11 +132,17 @@ auto parse_args(std::string &raw_command) -> std::vector<std::string> {
 auto parse_echo(std::vector<std::string> &args) -> std::string {
   std::string output;
   for (size_t i = 0; i < args.size(); ++i) {
+    if (args[i] == ">") {
+      if (i + 1 < args.size()) {
+        redirect_output(output + "\n", args[i + 1]);
+      }
+      return ""; // nothing printed to stdout when redirecting
+    }
     output += args[i];
-    if (i < args.size() - 1)
+    if (i + 1 < args.size() && args[i + 1] != ">")
       output += " ";
   }
-  return output;
+  return output + "\n";
 }
 
 auto find_executable(const std::string &command) -> std::string {
@@ -110,18 +167,33 @@ auto find_executable(const std::string &command) -> std::string {
   return "";
 }
 
-auto parse_type(std::string &command) -> std::string {
-  filter_command(command, 4);
+auto parse_type(std::vector<std::string> &args) -> std::string {
+  if (args.empty())
+    return "type: missing argument\n";
 
-  if (std::find(shell_builtins.begin(), shell_builtins.end(), command) !=
-      shell_builtins.end())
-    return std::format("{} is a shell builtin", command);
+  std::string cmd = args[0]; // Only 1st argument is needed
+  std::string output{std::format("{}: not found", cmd)};
 
-  std::string exec_path = find_executable(command);
-  if (!exec_path.empty())
-    return std::format("{} is {}", command, exec_path);
+  if (std::find(shell_builtins.begin(), shell_builtins.end(), cmd) !=
+      shell_builtins.end()) {
+    output = std::format("{} is a shell builtin", cmd);
+  }
 
-  return std::format("{}: not found", command);
+  else {
+    std::string exec_path = find_executable(cmd);
+    if (!exec_path.empty()) {
+      output = std::format("{} is {}", cmd, exec_path);
+    }
+  }
+
+  for (size_t i = 0; i < args.size(); ++i) {
+    if (args[i] == ">") {
+      if (i + 1 < args.size()) // the redirected file dump exists or not
+        redirect_output(output + "\n", args[i + 1]);
+      return ""; // nothing just pass to the next prompt
+    }
+  }
+  return output + "\n";
 }
 
 auto pwd() -> bool {
@@ -136,9 +208,21 @@ auto run_program(std::string &cmd_name, std::vector<std::string> &args)
   if (cmd_name == "pwd")
     return pwd();
 
+  auto pos_redirect_override = std::find(args.begin(), args.end(), ">");
+  bool allow_redirection = pos_redirect_override != args.end();
+
 #if defined(_WIN32) || defined(_WIN64)
   if (cmd_name == "cat") {
-    for (const auto &filepath : args) {
+
+    std::string output{};
+    for (int i = 0; i < args.size(); ++i) {
+      if (args[i] == ">") {
+        if (i + 1 < args.size()) {
+          redirect_output(output, args[i + 1]);
+        }
+        return true;
+      }
+      auto filepath = args[i];
       std::ifstream file(filepath);
       if (!file.is_open()) {
         std::cerr << "cat: " << filepath << ": No such file or directory\n";
@@ -146,10 +230,17 @@ auto run_program(std::string &cmd_name, std::vector<std::string> &args)
       }
       std::string line;
       while (std::getline(file, line)) {
-        std::cout << line << "\n";
+        if (allow_redirection) {
+          output += line + "\n";
+        } else {
+          std::cout << line << "\n";
+        }
       }
     }
     return true;
+  }
+  if (cmd_name == "clear") {
+    cmd_name = "cls";
   }
 
   std::string win_cmd = cmd_name;
@@ -168,6 +259,11 @@ auto run_program(std::string &cmd_name, std::vector<std::string> &args)
   if (exec_path.empty())
     return false;
 
+  std::string redirect_file{};
+  if (allow_redirection && std::next(pos_redirect_override) != args.end()) {
+    redirect_file = *std::next(pos_redirect_override);
+  }
+
   std::vector<std::string> build_args;
   build_args.push_back(cmd_name);
   for (auto &arg : args) {
@@ -180,11 +276,33 @@ auto run_program(std::string &cmd_name, std::vector<std::string> &args)
   }
   c_args.push_back(nullptr);
 
+  std::vector<char *> c_args_no_redirect;
+  if (allow_redirection) {
+    c_args_no_redirect.push_back(c_args[0]);
+    for (size_t k = 1; k < c_args.size() - 1; ++k) {
+      if (std::string(c_args[k]) == ">")
+        break;
+      c_args_no_redirect.push_back(c_args[k]);
+    }
+    c_args_no_redirect.push_back(nullptr);
+  }
+
   pid_t pid = fork();
   if (pid < 0) {
     return false;
   } else if (pid == 0) {
-    if (execvp(exec_path.c_str(), c_args.data()) == -1) {
+    if (allow_redirection && !redirect_file.empty()) {
+      int fd = open(redirect_file.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+      if (fd >= 0) {
+        dup2(fd, STDOUT_FILENO);
+        close(fd);
+      }
+    }
+
+    char **argv_to_use =
+        allow_redirection ? c_args_no_redirect.data() : c_args.data();
+
+    if (execvp(exec_path.c_str(), argv_to_use) == -1) {
       std::exit(1);
     }
   } else {
@@ -227,18 +345,21 @@ int main() {
   std::string raw_command{};
 
   while (true) {
-    std::cout << "$ ";
+    std::cout << std::format("┌──({}@V-Xon)-", USER_NAME) << "["
+              << fs::current_path().string() << "]\n└─$ ";
     std::getline(std::cin, raw_command);
     auto args = parse_args(raw_command);
+    if (args.empty())
+      continue;
     std::string get_type = args[0];
     args.erase(args.begin());
 
     if (get_type == "echo") {
-      std::cout << parse_echo(args) << std::endl;
+      std::cout << parse_echo(args);
       continue;
     }
     if (get_type == "type") {
-      std::cout << parse_type(raw_command) << std::endl;
+      std::cout << parse_type(args);
       continue;
     }
     if (get_type == "exit")
