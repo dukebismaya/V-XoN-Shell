@@ -164,18 +164,33 @@ auto find_executable(const std::string &command) -> std::string {
   return "";
 }
 
-auto parse_type(std::string &command) -> std::string {
-  filter_command(command, 4);
+auto parse_type(std::vector<std::string> &args) -> std::string {
+  if (args.empty())
+    return "type: missing argument\n";
 
-  if (std::find(shell_builtins.begin(), shell_builtins.end(), command) !=
-      shell_builtins.end())
-    return std::format("{} is a shell builtin", command);
+  std::string cmd = args[0]; // Only 1st argument is needed
+  std::string output{std::format("{}: not found", cmd)};
 
-  std::string exec_path = find_executable(command);
-  if (!exec_path.empty())
-    return std::format("{} is {}", command, exec_path);
+  if (std::find(shell_builtins.begin(), shell_builtins.end(), cmd) !=
+      shell_builtins.end()) {
+    output = std::format("{} is a shell builtin", cmd);
+  }
 
-  return std::format("{}: not found", command);
+  else {
+    std::string exec_path = find_executable(cmd);
+    if (!exec_path.empty()) {
+      output = std::format("{} is {}", cmd, exec_path);
+    }
+  }
+
+  for (size_t i = 0; i < args.size(); ++i) {
+    if (args[i] == ">") {
+      if (i + 1 < args.size()) // the redirected file dump exists or not
+        redirect_output(output, args[i + 1]);
+      return "\n";
+    }
+  }
+  return output + "\n";
 }
 
 auto pwd() -> bool {
@@ -298,7 +313,7 @@ int main() {
       continue;
     }
     if (get_type == "type") {
-      std::cout << parse_type(raw_command);
+      std::cout << parse_type(args);
       continue;
     }
     if (get_type == "exit")
