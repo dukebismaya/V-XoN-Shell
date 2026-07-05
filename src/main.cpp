@@ -16,8 +16,10 @@ const char *HOME_DIR = std::getenv("USERPROFILE");
 const char *USER_NAME = std::getenv("USERNAME");
 #else
 constexpr char PATH_DELIMITER = ':';
+#include <fcntl.h>
 #include <sys/wait.h>
 #include <unistd.h>
+
 const char *HOME_DIR = std::getenv("HOME");
 const char *USER_NAME = std::getenv("USER");
 #endif
@@ -109,11 +111,12 @@ auto parse_args(std::string &raw_command) -> std::vector<std::string> {
       if (hasChars) {
         args.push_back(curr_arg);
         curr_arg.clear();
-        if (c == '1') {
-          i++;
-        }
-        args.push_back(">");
+        hasChars = false;
       }
+      if (c == '1') {
+        i++;
+      }
+      args.push_back(">");
     }
 
     else {
@@ -205,9 +208,21 @@ auto run_program(std::string &cmd_name, std::vector<std::string> &args)
   if (cmd_name == "pwd")
     return pwd();
 
+  auto pos_redirect_override = std::find(args.begin(), args.end(), ">");
+  bool allow_redirection = pos_redirect_override != args.end();
+
 #if defined(_WIN32) || defined(_WIN64)
   if (cmd_name == "cat") {
-    for (const auto &filepath : args) {
+
+    std::string output{};
+    for (int i = 0; i < args.size(); ++i) {
+      if (args[i] == ">") {
+        if (i + 1 < args.size()) {
+          redirect_output(output, args[i + 1]);
+        }
+        return true;
+      }
+      auto filepath = args[i];
       std::ifstream file(filepath);
       if (!file.is_open()) {
         std::cerr << "cat: " << filepath << ": No such file or directory\n";
@@ -215,7 +230,11 @@ auto run_program(std::string &cmd_name, std::vector<std::string> &args)
       }
       std::string line;
       while (std::getline(file, line)) {
-        std::cout << line << "\n";
+        if (allow_redirection) {
+          output += line + "\n";
+        } else {
+          std::cout << line << "\n";
+        }
       }
     }
     return true;
@@ -252,11 +271,37 @@ auto run_program(std::string &cmd_name, std::vector<std::string> &args)
   }
   c_args.push_back(nullptr);
 
+  std::string redirect_file{};
+  std::vector<char *> c_args_no_redirect;
+  if (allow_redirection) {
+    if (std::next(pos_redirect_override) != args.end()) {
+      redirect_file = *std::next(pos_redirect_override);
+    }
+    c_args_no_redirect.push_back(c_args[0]);
+    for (size_t k = 1; k < c_args.size() - 1; ++k) {
+      if (std::string(c_args[k]) == ">")
+        break;
+      c_args_no_redirect.push_back(c_args[k]);
+    }
+    c_args_no_redirect.push_back(nullptr);
+  }
+
   pid_t pid = fork();
   if (pid < 0) {
     return false;
   } else if (pid == 0) {
-    if (execvp(exec_path.c_str(), c_args.data()) == -1) {
+    if (allow_redirection && !redirect_file.empty()) {
+      int fd = open(redirect_file.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+      if (fd >= 0) {
+        dup2(fd, STDOUT_FILENO);
+        close(fd);
+      }
+    }
+
+    char **argv_to_use =
+        allow_redirection ? c_args_no_redirect.data() : c_args.data();
+
+    if (execvp(exec_path.c_str(), argv_to_use) == -1) {
       std::exit(1);
     }
   } else {
