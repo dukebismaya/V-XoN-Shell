@@ -6,6 +6,7 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #if defined(_WIN32) || defined(_WIN64)
@@ -24,6 +25,8 @@ namespace fs = std::filesystem;
 
 const std::vector<std::string> shell_builtins{"cd", "echo", "exit", "type",
                                               "pwd"};
+const std::unordered_map<char, bool> check_escape{
+    {'"', true}, {'\\', true}, {'\n', true}, {'$', true}, {'`', true}};
 
 auto filter_command(std::string &command, size_t step_trim) -> void {
   size_t curr_idx = 0;
@@ -53,7 +56,23 @@ auto parse_args(std::string &raw_command) -> std::vector<std::string> {
   bool hasChars = false;
   for (size_t i = 0; i < raw_command.length(); ++i) {
     char c = raw_command[i];
-    if (c == '\"' && !in_single_quote) {
+    if (c == '\\') {
+      if (in_double_quote) {
+        if (i + 1 < raw_command.length() &&
+            check_escape.count(raw_command[i + 1])) {
+          curr_arg += raw_command[++i];
+        } else {
+          curr_arg += c;
+        }
+      } else {
+        if (in_single_quote) {
+          curr_arg += c;
+        } else if (i + 1 < raw_command.length()) {
+          curr_arg += raw_command[++i];
+        }
+      }
+      hasChars = true;
+    } else if (c == '\"' && !in_single_quote) {
       in_double_quote = !in_double_quote;
       hasChars = true;
     } else if (c == '\'' && !in_double_quote) {
@@ -68,8 +87,6 @@ auto parse_args(std::string &raw_command) -> std::vector<std::string> {
         curr_arg.clear();
         hasChars = false;
       }
-    } else if (c == '\\') {
-      curr_arg += raw_command[++i];
     } else {
       curr_arg += c;
       hasChars = true;
@@ -153,6 +170,9 @@ auto run_program(std::string &cmd_name, std::vector<std::string> &args)
     }
     return true;
   }
+  if (cmd_name == "clear") {
+    cmd_name = "cls";
+  }
 
   std::string win_cmd = cmd_name;
   for (auto &arg : args) {
@@ -233,6 +253,8 @@ int main() {
               << fs::current_path().string() << "]\n└─$ ";
     std::getline(std::cin, raw_command);
     auto args = parse_args(raw_command);
+    if (args.empty())
+      continue;
     std::string get_type = args[0];
     args.erase(args.begin());
 
