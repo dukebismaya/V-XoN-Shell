@@ -134,9 +134,9 @@ auto parse_echo(std::vector<std::string> &args) -> std::string {
   for (size_t i = 0; i < args.size(); ++i) {
     if (args[i] == ">") {
       if (i + 1 < args.size()) {
-        redirect_output(output, args[i + 1]);
+        redirect_output(output + "\n", args[i + 1]);
       }
-      return "\n";
+      return ""; // nothing printed to stdout when redirecting
     }
     output += args[i];
     if (i + 1 < args.size() && args[i + 1] != ">")
@@ -189,8 +189,8 @@ auto parse_type(std::vector<std::string> &args) -> std::string {
   for (size_t i = 0; i < args.size(); ++i) {
     if (args[i] == ">") {
       if (i + 1 < args.size()) // the redirected file dump exists or not
-        redirect_output(output, args[i + 1]);
-      return "\n";
+        redirect_output(output + "\n", args[i + 1]);
+      return ""; // nothing just pass to the next prompt
     }
   }
   return output + "\n";
@@ -259,6 +259,11 @@ auto run_program(std::string &cmd_name, std::vector<std::string> &args)
   if (exec_path.empty())
     return false;
 
+  std::string redirect_file{};
+  if (allow_redirection && std::next(pos_redirect_override) != args.end()) {
+    redirect_file = *std::next(pos_redirect_override);
+  }
+
   std::vector<std::string> build_args;
   build_args.push_back(cmd_name);
   for (auto &arg : args) {
@@ -271,12 +276,8 @@ auto run_program(std::string &cmd_name, std::vector<std::string> &args)
   }
   c_args.push_back(nullptr);
 
-  std::string redirect_file{};
   std::vector<char *> c_args_no_redirect;
   if (allow_redirection) {
-    if (std::next(pos_redirect_override) != args.end()) {
-      redirect_file = *std::next(pos_redirect_override);
-    }
     c_args_no_redirect.push_back(c_args[0]);
     for (size_t k = 1; k < c_args.size() - 1; ++k) {
       if (std::string(c_args[k]) == ">")
