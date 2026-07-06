@@ -106,17 +106,27 @@ auto parse_args(std::string &raw_command) -> std::vector<std::string> {
       }
     }
 
-    else if (c == '>' || (c == '1' && i + 1 < raw_command.length() &&
-                          raw_command[i + 1] == '>')) {
+    else if (c == '>' && !curr_arg.empty() &&
+             (curr_arg.back() == '1' || curr_arg.back() == '2') &&
+             i + 1 < raw_command.length()) {
+
+      auto curr_arg_back = curr_arg.back();
+      curr_arg.pop_back();
+      if (!curr_arg.empty()) {
+        args.push_back(curr_arg);
+      }
+      curr_arg.clear();
+      hasChars = false;
+      args.push_back(std::string(1, curr_arg_back) + ">");
+    }
+
+    else if (c == '>' || i + 1 < raw_command.length()) {
       if (hasChars) {
         args.push_back(curr_arg);
         curr_arg.clear();
         hasChars = false;
       }
-      if (c == '1') {
-        i++;
-      }
-      args.push_back(">");
+      args.push_back("1>");
     }
 
     else {
@@ -241,6 +251,10 @@ auto run_program(std::string &cmd_name, std::vector<std::string> &args)
   }
   if (cmd_name == "clear") {
     cmd_name = "cls";
+  } else if (cmd_name == "ls") {
+    cmd_name = "dir";
+  } else if (cmd_name == "rm") {
+    cmd_name = "del";
   }
 
   std::string win_cmd = cmd_name;
