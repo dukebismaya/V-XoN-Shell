@@ -3,7 +3,6 @@
 #include "platform.h"
 #include <exception>
 
-// Centralized redirection info — parsed once, passed everywhere
 struct RedirectInfo {
   std::string stdout_file; // target for 1>
   std::string stderr_file; // target for 2>
@@ -12,7 +11,6 @@ struct RedirectInfo {
   bool has_stderr_redirect() const { return !stderr_file.empty(); }
 };
 
-// RAII wrapper for Unix file descriptors — prevents fd leaks on all exit paths
 #if !defined(_WIN32) && !defined(_WIN64)
 class FileDescriptor {
   int fd_ = -1;
@@ -26,13 +24,11 @@ public:
       close(fd_);
   }
 
-  // Non-copyable, non-movable
   FileDescriptor(const FileDescriptor &) = delete;
   FileDescriptor &operator=(const FileDescriptor &) = delete;
 
   int get() const { return fd_; }
 
-  // dup2 to target fd and release ownership (prevents double-close)
   void apply_redirect(int target_fd) {
     if (fd_ >= 0) {
       dup2(fd_, target_fd);
@@ -43,12 +39,11 @@ public:
 };
 #endif
 
-// Write content to a file (used by builtins for in-process redirection)
 inline auto redirect_output(const std::string &output,
                             const std::string &filepath,
-                            std::ios_base::openmode mode =
-                                std::ios_base::trunc) -> void {
-  // Ensure parent directories exist
+                            std::ios_base::openmode mode = std::ios_base::trunc)
+    -> void {
+
   auto parent = fs::path(filepath).parent_path();
   if (!parent.empty() && !fs::exists(parent))
     fs::create_directories(parent);
@@ -66,8 +61,6 @@ inline auto redirect_output(const std::string &output,
   }
 }
 
-// Single-pass O(n) in-place extraction: strips 1>/2> tokens from args,
-// returns RedirectInfo with target file paths. Zero extra allocation.
 inline auto extract_redirection(std::vector<std::string> &args)
     -> RedirectInfo {
   RedirectInfo info;
