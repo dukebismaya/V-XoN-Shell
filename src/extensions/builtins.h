@@ -1,0 +1,88 @@
+#pragma once
+
+#include "executor.h"
+#include "redirection.h"
+
+inline auto handle_echo(std::vector<std::string> &args) -> void {
+  auto redir = extract_redirection(args);
+
+  std::string output;
+  for (size_t i = 0; i < args.size(); ++i) {
+    if (i > 0)
+      output += " ";
+    output += args[i];
+  }
+
+  if (redir.has_stdout_redirect())
+    redirect_output(output + "\n", redir.stdout_file);
+  else
+    std::cout << output << "\n";
+
+  // echo produces no stderr, but create/truncate the file if 2> is specified
+  if (redir.has_stderr_redirect())
+    redirect_output("", redir.stderr_file);
+}
+
+inline auto handle_type(std::vector<std::string> &args) -> void {
+  auto redir = extract_redirection(args);
+
+  if (args.empty()) {
+    std::cout << "type: missing argument\n";
+    return;
+  }
+
+  const auto &cmd = args[0];
+  std::string output;
+
+  if (SHELL_BUILTINS.contains(cmd)) {
+    output = std::format("{} is a shell builtin", cmd);
+  } else {
+    std::string exec_path = find_executable(cmd);
+    if (!exec_path.empty())
+      output = std::format("{} is {}", cmd, exec_path);
+    else
+      output = std::format("{}: not found", cmd);
+  }
+
+  if (redir.has_stdout_redirect())
+    redirect_output(output + "\n", redir.stdout_file);
+  else
+    std::cout << output << "\n";
+
+  if (redir.has_stderr_redirect())
+    redirect_output("", redir.stderr_file);
+}
+
+inline auto handle_cd(std::vector<std::string> &args) -> void {
+  auto redir = extract_redirection(args);
+
+  if (args.empty()) {
+    if (HOME_DIR && fs::exists(HOME_DIR))
+      fs::current_path(HOME_DIR);
+    return;
+  }
+
+  std::string target = args[0];
+
+  if (auto pos = target.find('~'); pos != std::string::npos && HOME_DIR)
+    target.replace(pos, 1, HOME_DIR);
+
+  if (fs::exists(target) && fs::is_directory(target)) {
+    fs::current_path(target);
+  } else {
+    std::cout << std::format("cd: {}: No such file or directory\n", target);
+  }
+}
+
+inline auto handle_pwd(std::vector<std::string> &args) -> void {
+  auto redir = extract_redirection(args);
+  std::string output = fs::current_path().string() + "\n";
+
+  if (redir.has_stdout_redirect())
+    redirect_output(output, redir.stdout_file);
+  else
+    std::cout << output;
+
+  if (redir.has_stderr_redirect())
+    redirect_output("", redir.stderr_file);
+}

@@ -69,3 +69,4 @@ Testing/
 .cache/
 
 .clangd
+current_commands_list.txt
