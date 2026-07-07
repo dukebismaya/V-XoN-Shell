@@ -23,7 +23,8 @@ inline auto handle_echo(std::vector<std::string> &args) -> void {
   } else
     std::cout << output << "\n";
 
-  // echo produces no stderr, but create/truncate the file if 2> is specified
+  // echo produces no stderr, but create/truncate the file if 2>/2>> is
+  // specified
   if (redir.has_stderr_redirect()) {
     if (redir.stderr_append_mode) {
       redirect_output("", redir.stderr_file, std::ios_base::app);
@@ -97,11 +98,18 @@ inline auto handle_pwd(std::vector<std::string> &args) -> void {
   auto redir = extract_redirection(args);
   std::string output = fs::current_path().string() + "\n";
 
-  if (redir.has_stdout_redirect())
-    redirect_output(output, redir.stdout_file);
-  else
+  if (redir.has_stdout_redirect()) {
+    if (redir.stdout_append_mode)
+      redirect_output(output, redir.stdout_file, std::ios_base::app);
+    else
+      redirect_output(output, redir.stdout_file);
+  } else
     std::cout << output;
 
-  if (redir.has_stderr_redirect())
-    redirect_output("", redir.stderr_file);
+  if (redir.has_stderr_redirect()) {
+    if (redir.stderr_append_mode)
+      redirect_output("", redir.stderr_file, std::ios_base::app);
+    else
+      redirect_output("", redir.stderr_file);
+  }
 }
