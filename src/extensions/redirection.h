@@ -4,11 +4,13 @@
 #include <exception>
 
 struct RedirectInfo {
-  std::string stdout_file; // target for 1>
-  std::string stderr_file; // target for 2>
+  std::string stdout_file; // target for 1> / 1>>
+  std::string stderr_file; // target for 2> / 2>>
 
   bool has_stdout_redirect() const { return !stdout_file.empty(); }
   bool has_stderr_redirect() const { return !stderr_file.empty(); }
+  bool stdout_append_mode = false;
+  bool stderr_append_mode = false;
 };
 
 #if !defined(_WIN32) && !defined(_WIN64)
@@ -67,9 +69,15 @@ inline auto extract_redirection(std::vector<std::string> &args)
   auto write_it = args.begin();
 
   for (auto it = args.begin(); it != args.end(); ++it) {
-    if (*it == "1>" && std::next(it) != args.end()) {
+    if ((*it == "1>" || *it == "1>>") && std::next(it) != args.end()) {
+      if (*it == "1>>") {
+        info.stdout_append_mode = true;
+      }
       info.stdout_file = *++it;
-    } else if (*it == "2>" && std::next(it) != args.end()) {
+    } else if ((*it == "2>" || *it == "2>>") && std::next(it) != args.end()) {
+      if (*it == "2>>") {
+        info.stderr_append_mode = true;
+      }
       info.stderr_file = *++it;
     } else {
       if (write_it != it)
