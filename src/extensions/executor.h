@@ -55,10 +55,16 @@ inline auto run_program(const std::string &cmd_name,
       }
     }
 
-    if (redir.has_stdout_redirect())
-      redirect_output(output, redir.stdout_file);
-    if (redir.has_stderr_redirect())
-      redirect_output(err_output, redir.stderr_file);
+    if (redir.has_stdout_redirect()) {
+      auto mode =
+          redir.stdout_append_mode ? std::ios_base::app : std::ios_base::trunc;
+      redirect_output(output, redir.stdout_file, mode);
+    }
+    if (redir.has_stderr_redirect()) {
+      auto mode =
+          redir.stderr_append_mode ? std::ios_base::app : std::ios_base::trunc;
+      redirect_output(err_output, redir.stderr_file, mode);
+    }
     return true;
   }
 
@@ -106,11 +112,15 @@ inline auto run_program(const std::string &cmd_name,
     return false;
   } else if (pid == 0) {
     if (redir.has_stdout_redirect()) {
-      FileDescriptor fd(redir.stdout_file, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+      int flags =
+          O_WRONLY | O_CREAT | (redir.stdout_append_mode ? O_APPEND : O_TRUNC);
+      FileDescriptor fd(redir.stdout_file, flags, 0644);
       fd.apply_redirect(STDOUT_FILENO);
     }
     if (redir.has_stderr_redirect()) {
-      FileDescriptor fd(redir.stderr_file, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+      int flags =
+          O_WRONLY | O_CREAT | (redir.stderr_append_mode ? O_APPEND : O_TRUNC);
+      FileDescriptor fd(redir.stderr_file, flags, 0644);
       fd.apply_redirect(STDERR_FILENO);
     }
 
