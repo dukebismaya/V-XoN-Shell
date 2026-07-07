@@ -64,26 +64,33 @@ inline auto parse_args(const std::string &raw_command)
     else if (c == '>') {
       if (!curr_arg.empty() &&
           (curr_arg.back() == '1' || curr_arg.back() == '2')) {
-        // fd number glued to > (e.g., "2>file" or "echo hello 2>")
         char fd_char = curr_arg.back();
         curr_arg.pop_back();
         if (!curr_arg.empty()) {
           args.push_back(std::move(curr_arg));
           curr_arg.clear();
         }
-        args.push_back(std::string(1, fd_char) + ">");
+        if (raw_command[i + 1] == '>' && i + 2 < raw_command.length()) {
+          args.push_back(std::string(1, fd_char) + ">>");
+          i++;
+        } else {
+          args.push_back(std::string(1, fd_char) + ">");
+        }
       } else {
         // Bare > defaults to stdout redirect (1>)
         if (has_chars) {
           args.push_back(std::move(curr_arg));
           curr_arg.clear();
         }
-        args.push_back("1>");
+        if (raw_command[i + 1] == '>' && i + 2 < raw_command.length()) {
+          args.push_back("1>>");
+        } else {
+          args.push_back("1>");
+        }
       }
       has_chars = false;
     }
 
-    // Regular character
     else {
       curr_arg += c;
       has_chars = true;
