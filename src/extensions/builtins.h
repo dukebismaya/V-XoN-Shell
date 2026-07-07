@@ -2,6 +2,7 @@
 
 #include "executor.h"
 #include "redirection.h"
+#include <ios>
 
 inline auto handle_echo(std::vector<std::string> &args) -> void {
   auto redir = extract_redirection(args);
@@ -13,14 +14,23 @@ inline auto handle_echo(std::vector<std::string> &args) -> void {
     output += args[i];
   }
 
-  if (redir.has_stdout_redirect())
-    redirect_output(output + "\n", redir.stdout_file);
-  else
+  if (redir.has_stdout_redirect()) {
+    if (redir.stdout_append_mode) {
+      redirect_output(output + "\n", redir.stdout_file, std::ios_base::app);
+    } else {
+      redirect_output(output + "\n", redir.stdout_file);
+    }
+  } else
     std::cout << output << "\n";
 
   // echo produces no stderr, but create/truncate the file if 2> is specified
-  if (redir.has_stderr_redirect())
-    redirect_output("", redir.stderr_file);
+  if (redir.has_stderr_redirect()) {
+    if (redir.stderr_append_mode) {
+      redirect_output("", redir.stderr_file, std::ios_base::app);
+    } else {
+      redirect_output("", redir.stderr_file);
+    }
+  }
 }
 
 inline auto handle_type(std::vector<std::string> &args) -> void {
@@ -44,13 +54,22 @@ inline auto handle_type(std::vector<std::string> &args) -> void {
       output = std::format("{}: not found", cmd);
   }
 
-  if (redir.has_stdout_redirect())
-    redirect_output(output + "\n", redir.stdout_file);
-  else
+  if (redir.has_stdout_redirect()) {
+    if (redir.stdout_append_mode) {
+      redirect_output(output + "\n", redir.stdout_file, std::ios_base::app);
+    } else {
+      redirect_output(output + "\n", redir.stdout_file);
+    }
+  } else
     std::cout << output << "\n";
 
-  if (redir.has_stderr_redirect())
-    redirect_output("", redir.stderr_file);
+  if (redir.has_stderr_redirect()) {
+    if (redir.stderr_append_mode) {
+      redirect_output("", redir.stderr_file, std::ios_base::app);
+    } else {
+      redirect_output("", redir.stderr_file);
+    }
+  }
 }
 
 inline auto handle_cd(std::vector<std::string> &args) -> void {
