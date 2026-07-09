@@ -70,3 +70,4 @@ Testing/
 
 .clangd
 current_commands_list.txt
+test/
