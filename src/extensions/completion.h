@@ -41,17 +41,19 @@ public:
 inline auto find_completions(const std::string &prefix)
     -> std::vector<std::string> {
   std::vector<std::string> matches;
+  std::unordered_set<std::string> seen;
 
   for (const auto &builtin : SHELL_BUILTINS) {
-    if (builtin.starts_with(prefix))
+    if (builtin.starts_with(prefix)) {
       matches.push_back(builtin);
+      seen.insert(builtin);
+    }
   }
 
   const auto *path_env = std::getenv("PATH");
   if (path_env) {
     std::stringstream ss(path_env);
     std::string dir;
-    std::unordered_set<std::string> seen;
 
     while (std::getline(ss, dir, PATH_DELIMITER)) {
       std::error_code ec;
