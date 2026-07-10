@@ -3,8 +3,21 @@
 #include "executor.h"
 #include "platform.h"
 
-#if !defined(_WIN32) && !defined(_WIN64)
 #include <optional>
+
+#if defined(_WIN32) || defined(_WIN64)
+#include <conio.h>
+
+class RawMode {
+public:
+  RawMode() {}
+  void restore() {}
+  RawMode(const RawMode &) = delete;
+  RawMode &operator=(const RawMode &) = delete;
+  ~RawMode() { restore(); }
+};
+
+#else
 #include <termios.h>
 
 class RawMode {
@@ -37,7 +50,7 @@ public:
 
   ~RawMode() { restore(); }
 };
-
+#endif
 inline auto find_completions(const std::string &prefix)
     -> std::vector<std::string> {
   std::vector<std::string> matches;
@@ -63,9 +76,20 @@ inline auto find_completions(const std::string &prefix)
           continue;
         const auto &name = entry.path().filename().string();
         if (name.starts_with(prefix) && !seen.contains(name)) {
+#if defined(_WIN32) || defined(_WIN64)
+          std::string lower_name = name;
+          std::transform(lower_name.begin(), lower_name.end(),
+                         lower_name.begin(), ::tolower);
+          bool is_exec =
+              lower_name.ends_with(".exe") || lower_name.ends_with(".bat") ||
+              lower_name.ends_with(".cmd") || lower_name.ends_with(".com");
+#else
           auto perms = entry.status(ec).permissions();
-          if (!ec && (perms & (fs::perms::owner_exec | fs::perms::group_exec |
-                               fs::perms::others_exec)) != fs::perms::none) {
+          bool is_exec =
+              !ec && (perms & (fs::perms::owner_exec | fs::perms::group_exec |
+                               fs::perms::others_exec)) != fs::perms::none;
+#endif
+          if (is_exec) {
             matches.push_back(name);
             seen.insert(name);
           }
@@ -87,9 +111,20 @@ inline auto readline_raw(const std::string &prompt, RawMode & /*raw*/)
 
   while (true) {
     char c{};
+#if defined(_WIN32) || defined(_WIN64)
+    int ch = _getch();
+    if (ch == 255 || ch == EOF)
+      return std::nullopt; // EOF / error
+    if (ch == 0 || ch == 224) {
+      _getch(); // consume extended key
+      continue;
+    }
+    c = static_cast<char>(ch);
+#else
     ssize_t n = ::read(STDIN_FILENO, &c, 1);
     if (n <= 0)
       return std::nullopt; // EOF / error
+#endif
 
     if (c == '\t') {
       auto matches = find_completions(buf);
@@ -165,5 +200,3 @@ inline auto readline_raw(const std::string &prompt, RawMode & /*raw*/)
     // Everything else (arrow keys send escape sequences, etc.) is ignored
   }
 }
-
-#endif
