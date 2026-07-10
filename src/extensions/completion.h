@@ -83,6 +83,7 @@ inline auto readline_raw(const std::string &prompt, RawMode & /*raw*/)
   std::cout << prompt << std::flush;
 
   std::string buf;
+  bool tab_pressed = false;
 
   while (true) {
     char c{};
@@ -102,6 +103,7 @@ inline auto readline_raw(const std::string &prompt, RawMode & /*raw*/)
         std::string suffix = completed.substr(buf.size()) + " ";
         std::cout << suffix << std::flush;
         buf = completed + " ";
+        tab_pressed = false;
 
       } else {
         // multiple matches — find longest common prefix
@@ -115,15 +117,20 @@ inline auto readline_raw(const std::string &prompt, RawMode & /*raw*/)
           std::string suffix = lcp.substr(buf.size());
           std::cout << suffix << std::flush;
           buf = lcp;
+          tab_pressed = false;
         } else {
-          // Already at LCP — show all options on next TAB
-          // (second TAB: print list)
-          std::cout << '\a' << std::flush;
-          // print matches on a new line, then reprint prompt+buf
-          std::cout << "\n";
-          for (const auto &m : matches)
-            std::cout << m << "  ";
-          std::cout << "\n" << prompt << buf << std::flush;
+          if (!tab_pressed) {
+            // First time at this LCP — ring bell
+            std::cout << '\a' << std::flush;
+            tab_pressed = true;
+          } else {
+            // (second TAB: print list)
+            std::cout << "\n";
+            for (const auto &m : matches)
+              std::cout << m << "  ";
+            std::cout << "\n" << prompt << buf << std::flush;
+            tab_pressed = false;
+          }
         }
       }
 
@@ -134,6 +141,7 @@ inline auto readline_raw(const std::string &prompt, RawMode & /*raw*/)
         // Erase the last character on the terminal
         std::cout << "\b \b" << std::flush;
       }
+      tab_pressed = false;
 
     } else if (c == '\r' || c == '\n') {
       // Enter: accept line
@@ -152,6 +160,7 @@ inline auto readline_raw(const std::string &prompt, RawMode & /*raw*/)
       // Printable character
       buf += c;
       std::cout << c << std::flush;
+      tab_pressed = false;
     }
     // Everything else (arrow keys send escape sequences, etc.) is ignored
   }
