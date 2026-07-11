@@ -102,18 +102,33 @@ inline auto find_completions(const std::string &prefix)
   return matches;
 }
 
-inline auto find_file_completions(const std::string &prefix)
+inline auto find_file_completions(const std::string &full_prefix)
     -> std::vector<std::string> {
   std::vector<std::string> matches;
   std::error_code ec;
-  for (const auto &entry : fs::directory_iterator(
-           fs::current_path(), fs::directory_options::skip_permission_denied,
-           ec)) {
-    if (ec)
-      continue;
-    const auto &name = entry.path().filename().string();
-    if (name.starts_with(prefix)) {
-      matches.push_back(name);
+
+  std::string dir_path = "";
+  std::string search_prefix = full_prefix;
+  auto last_slash = full_prefix.find_last_of('/');
+  if (last_slash != std::string::npos) {
+    dir_path = full_prefix.substr(0, last_slash + 1);
+    search_prefix = full_prefix.substr(last_slash + 1);
+  }
+
+  fs::path search_dir = fs::current_path();
+  if (!dir_path.empty()) {
+    search_dir /= dir_path;
+  }
+
+  if (fs::exists(search_dir, ec) && fs::is_directory(search_dir, ec)) {
+    for (const auto &entry : fs::directory_iterator(
+             search_dir, fs::directory_options::skip_permission_denied, ec)) {
+      if (ec)
+        continue;
+      const auto &name = entry.path().filename().string();
+      if (name.starts_with(search_prefix)) {
+        matches.push_back(dir_path + name);
+      }
     }
   }
   std::sort(matches.begin(), matches.end());
@@ -151,7 +166,7 @@ inline auto readline_raw(const std::string &prompt, RawMode & /*raw*/)
 
       if (last_space == std::string::npos) {
         prefix = buf;
-        is_command_completion = true;
+        is_command_completion = (prefix.find('/') == std::string::npos);
       } else {
         prefix = buf.substr(last_space + 1);
         is_command_completion = false;
@@ -164,9 +179,21 @@ inline auto readline_raw(const std::string &prompt, RawMode & /*raw*/)
         std::cout << '\a' << std::flush;
 
       } else if (matches.size() == 1) {
-        // unique match — match + " ";
+        // unique match
         const std::string &completed = matches[0];
-        std::string suffix = completed.substr(prefix.size()) + " ";
+        
+        bool is_dir = false;
+        if (!is_command_completion) {
+            std::error_code ec;
+            is_dir = fs::is_directory(fs::current_path() / completed, ec);
+        }
+
+        std::string suffix = completed.substr(prefix.size());
+        if (is_dir) {
+            suffix += "/";
+        } else {
+            suffix += " ";
+        }
         std::cout << suffix << std::flush;
         buf += suffix;
         tab_pressed = false;
