@@ -102,6 +102,24 @@ inline auto find_completions(const std::string &prefix)
   return matches;
 }
 
+inline auto find_file_completions(const std::string &prefix)
+    -> std::vector<std::string> {
+  std::vector<std::string> matches;
+  std::error_code ec;
+  for (const auto &entry : fs::directory_iterator(
+           fs::current_path(), fs::directory_options::skip_permission_denied,
+           ec)) {
+    if (ec)
+      continue;
+    const auto &name = entry.path().filename().string();
+    if (name.starts_with(prefix)) {
+      matches.push_back(name);
+    }
+  }
+  std::sort(matches.begin(), matches.end());
+  return matches;
+}
+
 inline auto readline_raw(const std::string &prompt, RawMode & /*raw*/)
     -> std::optional<std::string> {
   std::cout << prompt << std::flush;
@@ -127,7 +145,20 @@ inline auto readline_raw(const std::string &prompt, RawMode & /*raw*/)
 #endif
 
     if (c == '\t') {
-      auto matches = find_completions(buf);
+      std::string prefix;
+      bool is_command_completion = false;
+      auto last_space = buf.find_last_of(' ');
+
+      if (last_space == std::string::npos) {
+        prefix = buf;
+        is_command_completion = true;
+      } else {
+        prefix = buf.substr(last_space + 1);
+        is_command_completion = false;
+      }
+
+      auto matches = is_command_completion ? find_completions(prefix)
+                                           : find_file_completions(prefix);
 
       if (matches.empty()) {
         std::cout << '\a' << std::flush;
@@ -135,9 +166,9 @@ inline auto readline_raw(const std::string &prompt, RawMode & /*raw*/)
       } else if (matches.size() == 1) {
         // unique match — match + " ";
         const std::string &completed = matches[0];
-        std::string suffix = completed.substr(buf.size()) + " ";
+        std::string suffix = completed.substr(prefix.size()) + " ";
         std::cout << suffix << std::flush;
-        buf = completed + " ";
+        buf += suffix;
         tab_pressed = false;
 
       } else {
@@ -147,11 +178,11 @@ inline auto readline_raw(const std::string &prompt, RawMode & /*raw*/)
           while (!m.starts_with(lcp))
             lcp.pop_back();
 
-        if (lcp.size() > buf.size()) {
+        if (lcp.size() > prefix.size()) {
           // Can extend to LCP without ambiguity
-          std::string suffix = lcp.substr(buf.size());
+          std::string suffix = lcp.substr(prefix.size());
           std::cout << suffix << std::flush;
-          buf = lcp;
+          buf += suffix;
           tab_pressed = false;
         } else {
           if (!tab_pressed) {
