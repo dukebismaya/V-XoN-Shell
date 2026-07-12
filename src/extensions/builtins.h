@@ -113,3 +113,32 @@ inline auto handle_pwd(std::vector<std::string> &args) -> void {
       redirect_output("", redir.stderr_file);
   }
 }
+
+inline auto handle_complete(std::vector<std::string> &args) -> void {
+  auto redir = extract_redirection(args);
+  if (args.empty()) {
+    std::cout << "complete: missing argument\n";
+  }
+  std::string output;
+  auto find_p_arg = std::find(args.begin(), args.end(), "-p");
+  if (find_p_arg != args.end() && std::next(find_p_arg) != args.end()) {
+    output =
+        "complete: " + *std::next(find_p_arg) + ": no completion specification";
+  }
+  if (redir.has_stdout_redirect()) {
+    if (redir.stdout_append_mode) {
+      redirect_output(output + "\n", redir.stdout_file, std::ios_base::app);
+    } else {
+      redirect_output(output + "\n", redir.stdout_file);
+    }
+  } else
+    std::cout << output << "\n";
+
+  if (redir.has_stderr_redirect()) {
+    if (redir.stderr_append_mode) {
+      redirect_output("", redir.stderr_file, std::ios_base::app);
+    } else {
+      redirect_output("", redir.stderr_file);
+    }
+  }
+}
