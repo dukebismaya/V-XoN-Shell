@@ -28,4 +28,4 @@ inline const char *USER_NAME = std::getenv("USER");
 namespace fs = std::filesystem;
 
 inline const std::unordered_set<std::string> SHELL_BUILTINS{
-    "cd", "echo", "exit", "type", "pwd"};
+    "cd", "complete", "echo", "exit", "type", "pwd"};

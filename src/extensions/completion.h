@@ -181,18 +181,18 @@ inline auto readline_raw(const std::string &prompt, RawMode & /*raw*/)
       } else if (matches.size() == 1) {
         // unique match
         const std::string &completed = matches[0];
-        
+
         bool is_dir = false;
         if (!is_command_completion) {
-            std::error_code ec;
-            is_dir = fs::is_directory(fs::current_path() / completed, ec);
+          std::error_code ec;
+          is_dir = fs::is_directory(fs::current_path() / completed, ec);
         }
 
         std::string suffix = completed.substr(prefix.size());
         if (is_dir) {
-            suffix += "/";
+          suffix += "/";
         } else {
-            suffix += " ";
+          suffix += " ";
         }
         std::cout << suffix << std::flush;
         buf += suffix;
@@ -219,8 +219,26 @@ inline auto readline_raw(const std::string &prompt, RawMode & /*raw*/)
           } else {
             // (second TAB: print list)
             std::cout << "\n";
-            for (const auto &m : matches)
-              std::cout << m << "  ";
+            for (const auto &m : matches) {
+              std::string display_text = m;
+              if (!is_command_completion) {
+                auto slash_idx = m.find_last_of('/');
+                if (slash_idx != std::string::npos) {
+                  display_text = m.substr(slash_idx + 1);
+                }
+              }
+
+              bool is_dir = false;
+              if (!is_command_completion) {
+                std::error_code ec;
+                is_dir = fs::is_directory(fs::current_path() / m, ec);
+              }
+
+              if (is_dir) {
+                display_text += "/";
+              }
+              std::cout << display_text << "  ";
+            }
             std::cout << "\n" << prompt << buf << std::flush;
             tab_pressed = false;
           }

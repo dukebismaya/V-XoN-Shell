@@ -2,10 +2,12 @@
 #include "extensions/parser.h"
 
 #include "extensions/completion.h"
+#include "extensions/platform.h"
 
 static std::string make_prompt() {
+  auto cwd = fs::current_path().string();
   return std::format("┌──({}@V-Xon)-[{}]\n└─$ ", USER_NAME,
-                     fs::current_path().string());
+                     cwd == HOME_DIR ? "~" : cwd);
 }
 
 int main() {
@@ -49,6 +51,10 @@ int main() {
     }
     if (cmd == "pwd") {
       handle_pwd(args);
+      continue;
+    }
+    if (cmd == "complete") {
+      handle_complete(args);
       continue;
     }
 
