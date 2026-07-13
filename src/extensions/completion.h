@@ -2,7 +2,6 @@
 
 #include "executor.h"
 #include "platform.h"
-
 #include <optional>
 
 #if defined(_WIN32) || defined(_WIN64)
@@ -135,6 +134,61 @@ inline auto find_file_completions(const std::string &full_prefix)
   return matches;
 }
 
+inline auto run_completer_script(const std::string &script_path)
+    -> std::vector<std::string> {
+  std::vector<std::string> results;
+#if defined(_WIN32) || defined(_WIN64)
+  FILE *pipe = _popen(script_path.c_str(), "r");
+  if (!pipe)
+    return results;
+  char buffer[4096];
+  std::string output;
+  while (fgets(buffer, sizeof(buffer), pipe)) {
+    output += buffer;
+  }
+  _pclose(pipe);
+#else
+  int pipefd[2];
+  if (pipe(pipefd) < 0)
+    return results;
+
+  pid_t pid = fork();
+  if (pid < 0) {
+    close(pipefd[0]);
+    close(pipefd[1]);
+    return results;
+  }
+  if (pid == 0) {
+    close(pipefd[0]);
+    dup2(pipefd[1], STDOUT_FILENO);
+    close(pipefd[1]);
+    execl(script_path.c_str(), script_path.c_str(), nullptr);
+    std::exit(1);
+  }
+  close(pipefd[1]);
+
+  std::string output;
+  char buffer[4096];
+  ssize_t bytes;
+  while ((bytes = read(pipefd[0], buffer, sizeof(buffer))) > 0) {
+    output.append(buffer, bytes);
+  }
+  close(pipefd[0]);
+
+  int status;
+  waitpid(pid, &status, 0);
+#endif
+
+  std::istringstream stream(output);
+  std::string line;
+  while (std::getline(stream, line)) {
+    if (!line.empty()) {
+      results.push_back(line);
+    }
+  }
+  return results;
+}
+
 inline auto readline_raw(const std::string &prompt, RawMode & /*raw*/)
     -> std::optional<std::string> {
   std::cout << prompt << std::flush;
@@ -172,8 +226,22 @@ inline auto readline_raw(const std::string &prompt, RawMode & /*raw*/)
         is_command_completion = false;
       }
 
-      auto matches = is_command_completion ? find_completions(prefix)
-                                           : find_file_completions(prefix);
+      std::vector<std::string> matches;
+      bool used_completer = false;
+      if (!is_command_completion) {
+        // Extract the command name (first word in buf)
+        std::string cmd_name = buf.substr(0, buf.find(' '));
+        auto it = register_completion.find(cmd_name);
+        if (it != register_completion.end()) {
+          matches = run_completer_script(it->second);
+          used_completer = true;
+        }
+      }
+
+      if (!used_completer) {
+        matches = is_command_completion ? find_completions(prefix)
+                                        : find_file_completions(prefix);
+      }
 
       if (matches.empty()) {
         std::cout << '\a' << std::flush;
@@ -183,7 +251,7 @@ inline auto readline_raw(const std::string &prompt, RawMode & /*raw*/)
         const std::string &completed = matches[0];
 
         bool is_dir = false;
-        if (!is_command_completion) {
+        if (!is_command_completion && !used_completer) {
           std::error_code ec;
           is_dir = fs::is_directory(fs::current_path() / completed, ec);
         }
