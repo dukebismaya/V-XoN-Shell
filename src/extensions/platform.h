@@ -8,6 +8,7 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -29,3 +30,5 @@ namespace fs = std::filesystem;
 
 inline const std::unordered_set<std::string> SHELL_BUILTINS{
     "cd", "complete", "echo", "exit", "type", "pwd"};
+
+inline std::unordered_map<std::string, std::string> register_completion;
