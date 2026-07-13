@@ -1,6 +1,7 @@
 #pragma once
 
 #include "executor.h"
+#include "platform.h"
 #include "redirection.h"
 #include <ios>
 
@@ -118,21 +119,40 @@ inline auto handle_complete(std::vector<std::string> &args) -> void {
   auto redir = extract_redirection(args);
   if (args.empty()) {
     std::cout << "complete: missing argument\n";
+    return;
   }
   std::string output;
+  // -p;
   auto find_p_arg = std::find(args.begin(), args.end(), "-p");
   if (find_p_arg != args.end() && std::next(find_p_arg) != args.end()) {
-    output =
-        "complete: " + *std::next(find_p_arg) + ": no completion specification";
-  }
-  if (redir.has_stdout_redirect()) {
-    if (redir.stdout_append_mode) {
-      redirect_output(output + "\n", redir.stdout_file, std::ios_base::app);
+    if (register_completion.count(*std::next(find_p_arg))) {
+      output = "complete -C '" + register_completion[*std::next(find_p_arg)] +
+               "' " + *std::next(find_p_arg);
     } else {
-      redirect_output(output + "\n", redir.stdout_file);
+      output = "complete: " + *std::next(find_p_arg) +
+               ": no completion specification";
     }
-  } else
-    std::cout << output << "\n";
+  }
+  // -C;
+  auto find_C_arg = std::find(args.begin(), args.end(), "-C");
+  if (find_C_arg != args.end() && std::next(find_C_arg) != args.end() &&
+      std::next(std::next(find_C_arg)) != args.end()) {
+    register_completion[*std::next(std::next(find_C_arg))] =
+        *std::next(find_C_arg);
+  }
+
+  if (redir.has_stdout_redirect()) {
+    std::string to_write = output.empty() ? "" : (output + "\n");
+    if (redir.stdout_append_mode) {
+      redirect_output(to_write, redir.stdout_file, std::ios_base::app);
+    } else {
+      redirect_output(to_write, redir.stdout_file);
+    }
+  } else {
+    if (!output.empty()) {
+      std::cout << output << "\n";
+    }
+  }
 
   if (redir.has_stderr_redirect()) {
     if (redir.stderr_append_mode) {
