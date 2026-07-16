@@ -134,11 +134,17 @@ inline auto find_file_completions(const std::string &full_prefix)
   return matches;
 }
 
-inline auto run_completer_script(const std::string &script_path)
+inline auto run_completer_script(const std::string &script_path,
+                                 const std::string &cmd_name,
+                                 const std::string &current_word,
+                                 const std::string &prev_word)
     -> std::vector<std::string> {
   std::vector<std::string> results;
 #if defined(_WIN32) || defined(_WIN64)
-  FILE *pipe = _popen(script_path.c_str(), "r");
+  std::string command =
+      script_path +
+      std::format(" \"{}\" \"{}\" \"{}\"", cmd_name, current_word, prev_word);
+  FILE *pipe = _popen(command.c_str(), "r");
   if (!pipe)
     return results;
   char buffer[4096];
@@ -162,7 +168,8 @@ inline auto run_completer_script(const std::string &script_path)
     close(pipefd[0]);
     dup2(pipefd[1], STDOUT_FILENO);
     close(pipefd[1]);
-    execl(script_path.c_str(), script_path.c_str(), nullptr);
+    execl(script_path.c_str(), script_path.c_str(), cmd_name.c_str(),
+          current_word.c_str(), prev_word.c_str(), nullptr);
     std::exit(1);
   }
   close(pipefd[1]);
@@ -229,11 +236,41 @@ inline auto readline_raw(const std::string &prompt, RawMode & /*raw*/)
       std::vector<std::string> matches;
       bool used_completer = false;
       if (!is_command_completion) {
-        // Extract the command name (first word in buf)
-        std::string cmd_name = buf.substr(0, buf.find(' '));
+        std::vector<std::string> tokens;
+        std::string current_token;
+        for (char c : buf) {
+          if (c == ' ') {
+            if (!current_token.empty()) {
+              tokens.push_back(current_token);
+              current_token.clear();
+            }
+          } else {
+            current_token += c;
+          }
+        }
+        if (!current_token.empty()) {
+          tokens.push_back(current_token);
+        }
+
+        std::string cmd_name = tokens.empty() ? buf : tokens[0];
+
+        std::string current_word = prefix;
+        std::string prev_word = "";
+
+        if (prefix.empty()) {
+          if (tokens.size() > 1) {
+            prev_word = tokens.back();
+          }
+        } else {
+          if (tokens.size() > 2) {
+            prev_word = tokens[tokens.size() - 2];
+          }
+        }
+
         auto it = register_completion.find(cmd_name);
         if (it != register_completion.end()) {
-          matches = run_completer_script(it->second);
+          matches = run_completer_script(it->second, cmd_name, current_word,
+                                         prev_word);
           used_completer = true;
         }
       }
