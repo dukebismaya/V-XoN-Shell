@@ -6,6 +6,7 @@
 
 #if defined(_WIN32) || defined(_WIN64)
 #include <conio.h>
+#include <sec_api/stdlib_s.h>
 
 class RawMode {
 public:
@@ -137,14 +138,23 @@ inline auto find_file_completions(const std::string &full_prefix)
 inline auto run_completer_script(const std::string &script_path,
                                  const std::string &cmd_name,
                                  const std::string &current_word,
-                                 const std::string &prev_word)
+                                 const std::string &prev_word,
+                                 const std::string &comp_line,
+                                 size_t comp_point)
     -> std::vector<std::string> {
   std::vector<std::string> results;
 #if defined(_WIN32) || defined(_WIN64)
   std::string command =
       script_path +
       std::format(" \"{}\" \"{}\" \"{}\"", cmd_name, current_word, prev_word);
+
+  _putenv_s("COMP_LINE", comp_line.c_str());
+  _putenv_s("COMP_POINT", std::to_string(comp_point).c_str());
+
   FILE *pipe = _popen(command.c_str(), "r");
+
+  _putenv_s("COMP_LINE", "");
+  _putenv_s("COMP_POINT", "");
   if (!pipe)
     return results;
   char buffer[4096];
@@ -168,6 +178,10 @@ inline auto run_completer_script(const std::string &script_path,
     close(pipefd[0]);
     dup2(pipefd[1], STDOUT_FILENO);
     close(pipefd[1]);
+
+    setenv("COMP_LINE", comp_line.c_str(), 1);
+    setenv("COMP_POINT", std::to_string(comp_point).c_str(), 1);
+
     execl(script_path.c_str(), script_path.c_str(), cmd_name.c_str(),
           current_word.c_str(), prev_word.c_str(), nullptr);
     std::exit(1);
@@ -270,7 +284,8 @@ inline auto readline_raw(const std::string &prompt, RawMode & /*raw*/)
         auto it = register_completion.find(cmd_name);
         if (it != register_completion.end()) {
           matches = run_completer_script(it->second, cmd_name, current_word,
-                                         prev_word);
+                                         prev_word, buf, buf.length());
+          std::sort(matches.begin(), matches.end());
           used_completer = true;
         }
       }
@@ -326,7 +341,7 @@ inline auto readline_raw(const std::string &prompt, RawMode & /*raw*/)
             std::cout << "\n";
             for (const auto &m : matches) {
               std::string display_text = m;
-              if (!is_command_completion) {
+              if (!is_command_completion && !used_completer) {
                 auto slash_idx = m.find_last_of('/');
                 if (slash_idx != std::string::npos) {
                   display_text = m.substr(slash_idx + 1);
