@@ -140,6 +140,11 @@ inline auto handle_complete(std::vector<std::string> &args) -> void {
     register_completion[*std::next(std::next(find_C_arg))] =
         *std::next(find_C_arg);
   }
+  // -r;
+  auto find_r_arg = std::find(args.begin(), args.end(), "-r");
+  if (find_r_arg != args.end() && std::next(find_r_arg) != args.end()) {
+    register_completion.erase(*std::next(find_r_arg));
+  }
 
   if (redir.has_stdout_redirect()) {
     std::string to_write = output.empty() ? "" : (output + "\n");
