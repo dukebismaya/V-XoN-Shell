@@ -276,7 +276,7 @@ inline auto readline_raw(const std::string &prompt, RawMode & /*raw*/)
             prev_word = tokens.back();
           }
         } else {
-          if (tokens.size() > 2) {
+          if (tokens.size() > 1) {
             prev_word = tokens[tokens.size() - 2];
           }
         }
