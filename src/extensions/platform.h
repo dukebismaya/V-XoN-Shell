@@ -29,6 +29,6 @@ inline const char *USER_NAME = std::getenv("USER");
 namespace fs = std::filesystem;
 
 inline const std::unordered_set<std::string> SHELL_BUILTINS{
-    "cd", "complete", "echo", "exit", "type", "pwd"};
+    "cd", "complete", "echo", "exit", "jobs", "pwd", "type"};
 
 inline std::unordered_map<std::string, std::string> register_completion;
