@@ -27,7 +27,8 @@ inline auto find_executable(const std::string &command) -> std::string {
 }
 
 inline auto run_program(const std::string &cmd_name,
-                        std::vector<std::string> &args) -> bool {
+                        std::vector<std::string> &args,
+                        bool run_in_background = false) -> bool {
   auto redir = extract_redirection(args);
 
 #if defined(_WIN32) || defined(_WIN64)
@@ -127,8 +128,14 @@ inline auto run_program(const std::string &cmd_name,
     execvp(exec_path.c_str(), argv.data());
     std::exit(1); // -> execvp fails
   } else {
-    int status;
-    waitpid(pid, &status, 0);
+    if (run_in_background) {
+      static int next_job_id = 1;
+      int job_id = next_job_id++;
+      std::cout << std::format("[{}] {}\n", job_id, pid);
+    } else {
+      int status;
+      waitpid(pid, &status, 0);
+    }
   }
 #endif
   return true;

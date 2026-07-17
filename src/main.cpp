@@ -30,6 +30,15 @@ int main() {
     if (args.empty())
       continue;
 
+    bool run_in_background = false;
+    if (args.back() == "&") {
+      run_in_background = true;
+      args.pop_back();
+    }
+
+    if (args.empty())
+      continue;
+
     std::string cmd = std::move(args[0]);
     args.erase(args.begin());
 
@@ -57,8 +66,12 @@ int main() {
       handle_complete(args);
       continue;
     }
+    if (cmd == "jobs") {
+      handle_background_jobs(args);
+      continue;
+    }
 
-    if (!run_program(cmd, args))
+    if (!run_program(cmd, args, run_in_background))
       std::cout << std::format("{}: command not found\n", cmd);
   }
 
