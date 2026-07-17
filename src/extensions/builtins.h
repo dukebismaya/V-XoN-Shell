@@ -78,8 +78,8 @@ inline auto handle_cd(std::vector<std::string> &args) -> void {
   auto redir = extract_redirection(args);
 
   if (args.empty()) {
-    if (HOME_DIR && fs::exists(HOME_DIR))
-      fs::current_path(HOME_DIR);
+    if (HOME_DIR && std::filesystem::exists(HOME_DIR))
+      std::filesystem::current_path(HOME_DIR);
     return;
   }
 
@@ -88,8 +88,8 @@ inline auto handle_cd(std::vector<std::string> &args) -> void {
   if (auto pos = target.find('~'); pos != std::string::npos && HOME_DIR)
     target.replace(pos, 1, HOME_DIR);
 
-  if (fs::exists(target) && fs::is_directory(target)) {
-    fs::current_path(target);
+  if (std::filesystem::exists(target) && std::filesystem::is_directory(target)) {
+    std::filesystem::current_path(target);
   } else {
     std::cout << std::format("cd: {}: No such file or directory\n", target);
   }
@@ -97,7 +97,7 @@ inline auto handle_cd(std::vector<std::string> &args) -> void {
 
 inline auto handle_pwd(std::vector<std::string> &args) -> void {
   auto redir = extract_redirection(args);
-  std::string output = fs::current_path().string() + "\n";
+  std::string output = std::filesystem::current_path().string() + "\n";
 
   if (redir.has_stdout_redirect()) {
     if (redir.stdout_append_mode)
@@ -165,5 +165,25 @@ inline auto handle_complete(std::vector<std::string> &args) -> void {
     } else {
       redirect_output("", redir.stderr_file);
     }
+  }
+}
+
+inline auto handle_background_jobs(std::vector<std::string> &args) -> void {
+  auto redir = extract_redirection(args);
+  std::string output;
+
+  if (redir.has_stdout_redirect()) {
+    if (redir.stdout_append_mode)
+      redirect_output(output, redir.stdout_file, std::ios_base::app);
+    else
+      redirect_output(output, redir.stdout_file);
+  } else
+    std::cout << output;
+
+  if (redir.has_stderr_redirect()) {
+    if (redir.stderr_append_mode)
+      redirect_output("", redir.stderr_file, std::ios_base::app);
+    else
+      redirect_output("", redir.stderr_file);
   }
 }

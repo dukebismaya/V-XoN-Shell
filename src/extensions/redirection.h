@@ -46,9 +46,9 @@ inline auto redirect_output(const std::string &output,
                             std::ios_base::openmode mode = std::ios_base::trunc)
     -> void {
 
-  auto parent = fs::path(filepath).parent_path();
-  if (!parent.empty() && !fs::exists(parent))
-    fs::create_directories(parent);
+  auto parent = std::filesystem::path(filepath).parent_path();
+  if (!parent.empty() && !std::filesystem::exists(parent))
+    std::filesystem::create_directories(parent);
 
   std::ofstream op_file{filepath, mode};
   if (!op_file.is_open()) {

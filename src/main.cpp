@@ -5,7 +5,7 @@
 #include "extensions/platform.h"
 
 static std::string make_prompt() {
-  auto cwd = fs::current_path().string();
+  auto cwd = std::filesystem::current_path().string();
   return std::format("┌──({}@V-Xon)-[{}]\n└─$ ", USER_NAME,
                      cwd == HOME_DIR ? "~" : cwd);
 }
@@ -27,6 +27,15 @@ int main() {
     raw_command = std::move(*input);
 
     auto args = parse_args(raw_command);
+    if (args.empty())
+      continue;
+
+    bool run_in_background = false;
+    if (args.back() == "&") {
+      run_in_background = true;
+      args.pop_back();
+    }
+
     if (args.empty())
       continue;
 
@@ -57,8 +66,12 @@ int main() {
       handle_complete(args);
       continue;
     }
+    if (cmd == "jobs") {
+      handle_background_jobs(args);
+      continue;
+    }
 
-    if (!run_program(cmd, args))
+    if (!run_program(cmd, args, run_in_background))
       std::cout << std::format("{}: command not found\n", cmd);
   }
 
