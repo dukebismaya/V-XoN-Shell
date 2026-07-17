@@ -88,7 +88,8 @@ inline auto handle_cd(std::vector<std::string> &args) -> void {
   if (auto pos = target.find('~'); pos != std::string::npos && HOME_DIR)
     target.replace(pos, 1, HOME_DIR);
 
-  if (std::filesystem::exists(target) && std::filesystem::is_directory(target)) {
+  if (std::filesystem::exists(target) &&
+      std::filesystem::is_directory(target)) {
     std::filesystem::current_path(target);
   } else {
     std::cout << std::format("cd: {}: No such file or directory\n", target);
@@ -171,6 +172,13 @@ inline auto handle_complete(std::vector<std::string> &args) -> void {
 inline auto handle_background_jobs(std::vector<std::string> &args) -> void {
   auto redir = extract_redirection(args);
   std::string output;
+  for (const auto &job : background_jobs) {
+    std::string status_padded = job.status;
+    if (status_padded.length() < 24) {
+      status_padded.append(24 - status_padded.length(), ' ');
+    }
+    output += std::format("[{}]+  {}{}\n", job.id, status_padded, job.command);
+  }
 
   if (redir.has_stdout_redirect()) {
     if (redir.stdout_append_mode)

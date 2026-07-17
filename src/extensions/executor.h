@@ -16,9 +16,10 @@ inline auto find_executable(const std::string &command) -> std::string {
 
     if (std::filesystem::exists(full_path)) {
       auto perms = std::filesystem::status(full_path).permissions();
-      bool is_executable =
-          (perms & (std::filesystem::perms::owner_exec | std::filesystem::perms::group_exec |
-                    std::filesystem::perms::others_exec)) != std::filesystem::perms::none;
+      bool is_executable = (perms & (std::filesystem::perms::owner_exec |
+                                     std::filesystem::perms::group_exec |
+                                     std::filesystem::perms::others_exec)) !=
+                           std::filesystem::perms::none;
       if (is_executable)
         return full_path.string();
     }
@@ -132,6 +133,12 @@ inline auto run_program(const std::string &cmd_name,
       static int next_job_id = 1;
       int job_id = next_job_id++;
       std::cout << std::format("[{}] {}\n", job_id, pid);
+      std::string full_cmd = argv_strs[0];
+      for (size_t i = 1; i < argv_strs.size(); ++i) {
+        full_cmd += " " + argv_strs[i];
+      }
+      full_cmd += " &";
+      background_jobs.push_back({job_id, pid, full_cmd, "Running"});
     } else {
       int status;
       waitpid(pid, &status, 0);
