@@ -26,7 +26,14 @@ inline const char *HOME_DIR = std::getenv("HOME");
 inline const char *USER_NAME = std::getenv("USER");
 #endif
 
+struct BackgroundJob {
+    int id;
+    int pid;
+    std::string command;
+    std::string status;
+};
 
+inline std::vector<BackgroundJob> background_jobs;
 
 inline const std::unordered_set<std::string> SHELL_BUILTINS{
     "cd", "complete", "echo", "exit", "jobs", "pwd", "type"};

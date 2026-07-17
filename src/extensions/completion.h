@@ -71,7 +71,8 @@ inline auto find_completions(const std::string &prefix)
     while (std::getline(ss, dir, PATH_DELIMITER)) {
       std::error_code ec;
       for (const auto &entry : std::filesystem::directory_iterator(
-               dir, std::filesystem::directory_options::skip_permission_denied, ec)) {
+               dir, std::filesystem::directory_options::skip_permission_denied,
+               ec)) {
         if (ec)
           continue;
         const auto &name = entry.path().filename().string();
@@ -86,8 +87,10 @@ inline auto find_completions(const std::string &prefix)
 #else
           auto perms = entry.status(ec).permissions();
           bool is_exec =
-              !ec && (perms & (std::filesystem::perms::owner_exec | std::filesystem::perms::group_exec |
-                               std::filesystem::perms::others_exec)) != std::filesystem::perms::none;
+              !ec && (perms & (std::filesystem::perms::owner_exec |
+                               std::filesystem::perms::group_exec |
+                               std::filesystem::perms::others_exec)) !=
+                         std::filesystem::perms::none;
 #endif
           if (is_exec) {
             matches.push_back(name);
@@ -120,9 +123,11 @@ inline auto find_file_completions(const std::string &full_prefix)
     search_dir /= dir_path;
   }
 
-  if (std::filesystem::exists(search_dir, ec) && std::filesystem::is_directory(search_dir, ec)) {
+  if (std::filesystem::exists(search_dir, ec) &&
+      std::filesystem::is_directory(search_dir, ec)) {
     for (const auto &entry : std::filesystem::directory_iterator(
-             search_dir, std::filesystem::directory_options::skip_permission_denied, ec)) {
+             search_dir,
+             std::filesystem::directory_options::skip_permission_denied, ec)) {
       if (ec)
         continue;
       const auto &name = entry.path().filename().string();
@@ -135,24 +140,19 @@ inline auto find_file_completions(const std::string &full_prefix)
   return matches;
 }
 
-inline auto run_completer_script(const std::string &script_path,
-                                 const std::string &cmd_name,
-                                 const std::string &current_word,
-                                 const std::string &prev_word,
-                                 const std::string &comp_line,
-                                 size_t comp_point)
-    -> std::vector<std::string> {
+inline auto
+run_completer_script(const std::string &script_path,
+                     const std::string &cmd_name, const std::string &curr_word,
+                     const std::string &prev_word, const std::string &comp_line,
+                     size_t comp_point) -> std::vector<std::string> {
   std::vector<std::string> results;
 #if defined(_WIN32) || defined(_WIN64)
   std::string command =
       script_path +
-      std::format(" \"{}\" \"{}\" \"{}\"", cmd_name, current_word, prev_word);
-
+      std::format(" \"{}\" \"{}\" \"{}\"", cmd_name, curr_word, prev_word);
   _putenv_s("COMP_LINE", comp_line.c_str());
   _putenv_s("COMP_POINT", std::to_string(comp_point).c_str());
-
   FILE *pipe = _popen(command.c_str(), "r");
-
   _putenv_s("COMP_LINE", "");
   _putenv_s("COMP_POINT", "");
   if (!pipe)
@@ -178,12 +178,10 @@ inline auto run_completer_script(const std::string &script_path,
     close(pipefd[0]);
     dup2(pipefd[1], STDOUT_FILENO);
     close(pipefd[1]);
-
     setenv("COMP_LINE", comp_line.c_str(), 1);
     setenv("COMP_POINT", std::to_string(comp_point).c_str(), 1);
-
     execl(script_path.c_str(), script_path.c_str(), cmd_name.c_str(),
-          current_word.c_str(), prev_word.c_str(), nullptr);
+          curr_word.c_str(), prev_word.c_str(), nullptr);
     std::exit(1);
   }
   close(pipefd[1]);
@@ -250,27 +248,26 @@ inline auto readline_raw(const std::string &prompt, RawMode & /*raw*/)
       std::vector<std::string> matches;
       bool used_completer = false;
       if (!is_command_completion) {
+        // Extract the command name (first word in buf)
         std::vector<std::string> tokens;
-        std::string current_token;
+        std::string curr_token;
         for (char c : buf) {
           if (c == ' ') {
-            if (!current_token.empty()) {
-              tokens.push_back(current_token);
-              current_token.clear();
+            if (!curr_token.empty()) {
+              tokens.push_back(curr_token);
+              curr_token.clear();
             }
           } else {
-            current_token += c;
+            curr_token += c;
           }
         }
-        if (!current_token.empty()) {
-          tokens.push_back(current_token);
+        if (!curr_token.empty()) {
+          tokens.push_back(curr_token);
         }
 
         std::string cmd_name = tokens.empty() ? buf : tokens[0];
-
-        std::string current_word = prefix;
+        std::string curr_word = prefix;
         std::string prev_word = "";
-
         if (prefix.empty()) {
           if (tokens.size() > 1) {
             prev_word = tokens.back();
@@ -283,7 +280,7 @@ inline auto readline_raw(const std::string &prompt, RawMode & /*raw*/)
 
         auto it = register_completion.find(cmd_name);
         if (it != register_completion.end()) {
-          matches = run_completer_script(it->second, cmd_name, current_word,
+          matches = run_completer_script(it->second, cmd_name, curr_word,
                                          prev_word, buf, buf.length());
           std::sort(matches.begin(), matches.end());
           used_completer = true;
@@ -305,7 +302,8 @@ inline auto readline_raw(const std::string &prompt, RawMode & /*raw*/)
         bool is_dir = false;
         if (!is_command_completion && !used_completer) {
           std::error_code ec;
-          is_dir = std::filesystem::is_directory(std::filesystem::current_path() / completed, ec);
+          is_dir = std::filesystem::is_directory(
+              std::filesystem::current_path() / completed, ec);
         }
 
         std::string suffix = completed.substr(prefix.size());
@@ -351,7 +349,8 @@ inline auto readline_raw(const std::string &prompt, RawMode & /*raw*/)
               bool is_dir = false;
               if (!is_command_completion) {
                 std::error_code ec;
-                is_dir = std::filesystem::is_directory(std::filesystem::current_path() / m, ec);
+                is_dir = std::filesystem::is_directory(
+                    std::filesystem::current_path() / m, ec);
               }
 
               if (is_dir) {
