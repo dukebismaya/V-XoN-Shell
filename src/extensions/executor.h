@@ -12,13 +12,13 @@ inline auto find_executable(const std::string &command) -> std::string {
   std::string curr_path;
 
   while (std::getline(raw_path, curr_path, PATH_DELIMITER)) {
-    auto full_path = fs::path(curr_path) / command;
+    auto full_path = std::filesystem::path(curr_path) / command;
 
-    if (fs::exists(full_path)) {
-      auto perms = fs::status(full_path).permissions();
+    if (std::filesystem::exists(full_path)) {
+      auto perms = std::filesystem::status(full_path).permissions();
       bool is_executable =
-          (perms & (fs::perms::owner_exec | fs::perms::group_exec |
-                    fs::perms::others_exec)) != fs::perms::none;
+          (perms & (std::filesystem::perms::owner_exec | std::filesystem::perms::group_exec |
+                    std::filesystem::perms::others_exec)) != std::filesystem::perms::none;
       if (is_executable)
         return full_path.string();
     }

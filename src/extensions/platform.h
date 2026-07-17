@@ -26,7 +26,7 @@ inline const char *HOME_DIR = std::getenv("HOME");
 inline const char *USER_NAME = std::getenv("USER");
 #endif
 
-namespace fs = std::filesystem;
+
 
 inline const std::unordered_set<std::string> SHELL_BUILTINS{
     "cd", "complete", "echo", "exit", "jobs", "pwd", "type"};

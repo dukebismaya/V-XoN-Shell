@@ -70,8 +70,8 @@ inline auto find_completions(const std::string &prefix)
 
     while (std::getline(ss, dir, PATH_DELIMITER)) {
       std::error_code ec;
-      for (const auto &entry : fs::directory_iterator(
-               dir, fs::directory_options::skip_permission_denied, ec)) {
+      for (const auto &entry : std::filesystem::directory_iterator(
+               dir, std::filesystem::directory_options::skip_permission_denied, ec)) {
         if (ec)
           continue;
         const auto &name = entry.path().filename().string();
@@ -86,8 +86,8 @@ inline auto find_completions(const std::string &prefix)
 #else
           auto perms = entry.status(ec).permissions();
           bool is_exec =
-              !ec && (perms & (fs::perms::owner_exec | fs::perms::group_exec |
-                               fs::perms::others_exec)) != fs::perms::none;
+              !ec && (perms & (std::filesystem::perms::owner_exec | std::filesystem::perms::group_exec |
+                               std::filesystem::perms::others_exec)) != std::filesystem::perms::none;
 #endif
           if (is_exec) {
             matches.push_back(name);
@@ -115,14 +115,14 @@ inline auto find_file_completions(const std::string &full_prefix)
     search_prefix = full_prefix.substr(last_slash + 1);
   }
 
-  fs::path search_dir = fs::current_path();
+  std::filesystem::path search_dir = std::filesystem::current_path();
   if (!dir_path.empty()) {
     search_dir /= dir_path;
   }
 
-  if (fs::exists(search_dir, ec) && fs::is_directory(search_dir, ec)) {
-    for (const auto &entry : fs::directory_iterator(
-             search_dir, fs::directory_options::skip_permission_denied, ec)) {
+  if (std::filesystem::exists(search_dir, ec) && std::filesystem::is_directory(search_dir, ec)) {
+    for (const auto &entry : std::filesystem::directory_iterator(
+             search_dir, std::filesystem::directory_options::skip_permission_denied, ec)) {
       if (ec)
         continue;
       const auto &name = entry.path().filename().string();
@@ -305,7 +305,7 @@ inline auto readline_raw(const std::string &prompt, RawMode & /*raw*/)
         bool is_dir = false;
         if (!is_command_completion && !used_completer) {
           std::error_code ec;
-          is_dir = fs::is_directory(fs::current_path() / completed, ec);
+          is_dir = std::filesystem::is_directory(std::filesystem::current_path() / completed, ec);
         }
 
         std::string suffix = completed.substr(prefix.size());
@@ -351,7 +351,7 @@ inline auto readline_raw(const std::string &prompt, RawMode & /*raw*/)
               bool is_dir = false;
               if (!is_command_completion) {
                 std::error_code ec;
-                is_dir = fs::is_directory(fs::current_path() / m, ec);
+                is_dir = std::filesystem::is_directory(std::filesystem::current_path() / m, ec);
               }
 
               if (is_dir) {

@@ -5,7 +5,7 @@
 #include "extensions/platform.h"
 
 static std::string make_prompt() {
-  auto cwd = fs::current_path().string();
+  auto cwd = std::filesystem::current_path().string();
   return std::format("┌──({}@V-Xon)-[{}]\n└─$ ", USER_NAME,
                      cwd == HOME_DIR ? "~" : cwd);
 }
