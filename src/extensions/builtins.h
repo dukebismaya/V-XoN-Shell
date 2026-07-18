@@ -172,6 +172,24 @@ inline auto handle_complete(std::vector<std::string> &args) -> void {
 inline auto handle_background_jobs(std::vector<std::string> &args) -> void {
   auto redir = extract_redirection(args);
   std::string output;
+
+#if !defined(_WIN32) && !defined(_WIN64)
+  for (auto &job : background_jobs) {
+    if (job.status == "Running") {
+      int status;
+      pid_t result = waitpid(job.pid, &status, WNOHANG);
+      if (result == job.pid) {
+        if (WIFEXITED(status)) {
+          job.status = "Done";
+          if (job.command.length() >= 2 &&
+              job.command.substr(job.command.length() - 2) == " &") {
+            job.command = job.command.substr(0, job.command.length() - 2);
+          }
+        }
+      }
+    }
+  }
+#endif
   for (size_t i = 0; i < background_jobs.size(); ++i) {
     const auto &job = background_jobs[i];
     std::string status_padded = job.status;
@@ -187,6 +205,11 @@ inline auto handle_background_jobs(std::vector<std::string> &args) -> void {
     output += std::format("[{}]{}  {}{}\n", job.id, marker, status_padded,
                           job.command);
   }
+
+  background_jobs.erase(
+      std::remove_if(background_jobs.begin(), background_jobs.end(),
+                     [](const BackgroundJob &j) { return j.status == "Done"; }),
+      background_jobs.end());
 
   if (redir.has_stdout_redirect()) {
     if (redir.stdout_append_mode)
