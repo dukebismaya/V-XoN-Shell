@@ -172,12 +172,20 @@ inline auto handle_complete(std::vector<std::string> &args) -> void {
 inline auto handle_background_jobs(std::vector<std::string> &args) -> void {
   auto redir = extract_redirection(args);
   std::string output;
-  for (const auto &job : background_jobs) {
+  for (size_t i = 0; i < background_jobs.size(); ++i) {
+    const auto &job = background_jobs[i];
     std::string status_padded = job.status;
     if (status_padded.length() < 24) {
       status_padded.append(24 - status_padded.length(), ' ');
     }
-    output += std::format("[{}]+  {}{}\n", job.id, status_padded, job.command);
+    char marker = ' ';
+    if (i == background_jobs.size() - 1) {
+      marker = '+';
+    } else if (background_jobs.size() >= 2 && i == background_jobs.size() - 2) {
+      marker = '-';
+    }
+    output += std::format("[{}]{}  {}{}\n", job.id, marker, status_padded,
+                          job.command);
   }
 
   if (redir.has_stdout_redirect()) {
