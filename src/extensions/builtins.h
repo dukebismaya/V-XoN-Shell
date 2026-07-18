@@ -168,9 +168,8 @@ inline auto handle_complete(std::vector<std::string> &args) -> void {
     }
   }
 }
+inline auto format_and_reap_jobs(bool print_all) -> std::string {
 
-inline auto handle_background_jobs(std::vector<std::string> &args) -> void {
-  auto redir = extract_redirection(args);
   std::string output;
 
 #if !defined(_WIN32) && !defined(_WIN64)
@@ -192,6 +191,8 @@ inline auto handle_background_jobs(std::vector<std::string> &args) -> void {
 #endif
   for (size_t i = 0; i < background_jobs.size(); ++i) {
     const auto &job = background_jobs[i];
+    if (!print_all && job.status != "Done")
+      continue;
     std::string status_padded = job.status;
     if (status_padded.length() < 24) {
       status_padded.append(24 - status_padded.length(), ' ');
@@ -210,7 +211,11 @@ inline auto handle_background_jobs(std::vector<std::string> &args) -> void {
       std::remove_if(background_jobs.begin(), background_jobs.end(),
                      [](const BackgroundJob &j) { return j.status == "Done"; }),
       background_jobs.end());
-
+  return output;
+}
+inline auto handle_background_jobs(std::vector<std::string> &args) -> void {
+  auto redir = extract_redirection(args);
+  std::string output = format_and_reap_jobs(true);
   if (redir.has_stdout_redirect()) {
     if (redir.stdout_append_mode)
       redirect_output(output, redir.stdout_file, std::ios_base::app);

@@ -19,6 +19,11 @@ int main() {
   while (true) {
     std::string raw_command;
 
+    std::string auto_reap = format_and_reap_jobs(false);
+    if (!auto_reap.empty()) {
+      std::cout << auto_reap;
+    }
+
     auto input = readline_raw(make_prompt(), raw);
     if (!input.has_value()) {
       raw.restore();
