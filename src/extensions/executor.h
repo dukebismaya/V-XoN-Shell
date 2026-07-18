@@ -130,8 +130,14 @@ inline auto run_program(const std::string &cmd_name,
     std::exit(1); // -> execvp fails
   } else {
     if (run_in_background) {
-      static int next_job_id = 1;
-      int job_id = next_job_id++;
+      int job_id{1};
+      if (!background_jobs.empty()) {
+        int max_id = 0;
+        for (const auto &job : background_jobs) {
+          max_id = std::max(max_id, job.id);
+        }
+        job_id = max_id + 1;
+      }
       std::cout << std::format("[{}] {}\n", job_id, pid);
       std::string full_cmd = argv_strs[0];
       for (size_t i = 1; i < argv_strs.size(); ++i) {
