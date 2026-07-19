@@ -130,8 +130,14 @@ inline auto run_program(const std::string &cmd_name,
     std::exit(1); // -> execvp fails
   } else {
     if (run_in_background) {
-      static int next_job_id = 1;
-      int job_id = next_job_id++;
+      int job_id{1};
+      if (!background_jobs.empty()) {
+        int max_id = 0;
+        for (const auto &job : background_jobs) {
+          max_id = std::max(max_id, job.id);
+        }
+        job_id = max_id + 1;
+      }
       std::cout << std::format("[{}] {}\n", job_id, pid);
       std::string full_cmd = argv_strs[0];
       for (size_t i = 1; i < argv_strs.size(); ++i) {
@@ -144,6 +150,116 @@ inline auto run_program(const std::string &cmd_name,
       waitpid(pid, &status, 0);
     }
   }
+#endif
+  return true;
+}
+
+// Split parsed args at the first "|" token into two command arg lists
+inline auto split_pipeline(const std::vector<std::string> &args)
+    -> std::pair<std::vector<std::string>, std::vector<std::string>> {
+  std::vector<std::string> left, right;
+  bool found_pipe = false;
+  for (const auto &tok : args) {
+    if (!found_pipe && tok == "|") {
+      found_pipe = true;
+      continue;
+    }
+    if (found_pipe)
+      right.push_back(tok);
+    else
+      left.push_back(tok);
+  }
+  return {left, right};
+}
+
+inline auto run_pipeline(const std::vector<std::string> &args) -> bool {
+#if !defined(_WIN32) && !defined(_WIN64)
+  auto [left_args, right_args] = split_pipeline(args);
+
+  if (left_args.empty() || right_args.empty())
+    return false;
+
+  auto left_redir = extract_redirection(left_args);
+  auto right_redir = extract_redirection(right_args);
+
+  std::string left_cmd = left_args[0];
+  std::string right_cmd = right_args[0];
+
+  std::string left_exec = find_executable(left_cmd);
+  std::string right_exec = find_executable(right_cmd);
+  if (left_exec.empty() || right_exec.empty())
+    return false;
+
+  std::vector<char *> left_argv, right_argv;
+  for (auto &s : left_args)
+    left_argv.push_back(const_cast<char *>(s.c_str()));
+  left_argv.push_back(nullptr);
+
+  for (auto &s : right_args)
+    right_argv.push_back(const_cast<char *>(s.c_str()));
+  right_argv.push_back(nullptr);
+
+  int pipefd[2];
+  if (pipe(pipefd) < 0)
+    return false;
+
+  pid_t pid1 = fork();
+  if (pid1 < 0) {
+    close(pipefd[0]);
+    close(pipefd[1]);
+    return false;
+  }
+  if (pid1 == 0) {
+    close(pipefd[0]);
+    dup2(pipefd[1], STDOUT_FILENO);
+    close(pipefd[1]);
+
+    if (left_redir.has_stderr_redirect()) {
+      int flags = O_WRONLY | O_CREAT |
+                  (left_redir.stderr_append_mode ? O_APPEND : O_TRUNC);
+      FileDescriptor fd(left_redir.stderr_file, flags, 0644);
+      fd.apply_redirect(STDERR_FILENO);
+    }
+
+    execvp(left_exec.c_str(), left_argv.data());
+    std::exit(1);
+  }
+
+  pid_t pid2 = fork();
+  if (pid2 < 0) {
+    close(pipefd[0]);
+    close(pipefd[1]);
+    waitpid(pid1, nullptr, 0);
+    return false;
+  }
+  if (pid2 == 0) {
+    close(pipefd[1]);
+    dup2(pipefd[0], STDIN_FILENO);
+    close(pipefd[0]);
+
+    if (right_redir.has_stdout_redirect()) {
+      int flags = O_WRONLY | O_CREAT |
+                  (right_redir.stdout_append_mode ? O_APPEND : O_TRUNC);
+      FileDescriptor fd(right_redir.stdout_file, flags, 0644);
+      fd.apply_redirect(STDOUT_FILENO);
+    }
+    if (right_redir.has_stderr_redirect()) {
+      int flags = O_WRONLY | O_CREAT |
+                  (right_redir.stderr_append_mode ? O_APPEND : O_TRUNC);
+      FileDescriptor fd(right_redir.stderr_file, flags, 0644);
+      fd.apply_redirect(STDERR_FILENO);
+    }
+
+    execvp(right_exec.c_str(), right_argv.data());
+    std::exit(1);
+  }
+
+  close(pipefd[0]);
+  close(pipefd[1]);
+
+  int status;
+  waitpid(pid1, &status, 0);
+  waitpid(pid2, &status, 0);
 #endif
   return true;
 }

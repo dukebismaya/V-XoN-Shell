@@ -35,6 +35,18 @@ int main() {
     if (args.empty())
       continue;
 
+    bool has_pipe = false;
+    for (const auto &a : args) {
+      if (a == "|") {
+        has_pipe = true;
+        break;
+      }
+    }
+    if (has_pipe) {
+      run_pipeline(args);
+      continue;
+    }
+
     bool run_in_background = false;
     if (args.back() == "&") {
       run_in_background = true;
