@@ -88,6 +88,16 @@ inline auto parse_args(const std::string &raw_command)
       has_chars = false;
     }
 
+    // Pipe operator: split into separate "|" token
+    else if (c == '|') {
+      if (has_chars) {
+        args.push_back(std::move(curr_arg));
+        curr_arg.clear();
+        has_chars = false;
+      }
+      args.push_back("|");
+    }
+
     else {
       curr_arg += c;
       has_chars = true;
