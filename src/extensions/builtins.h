@@ -168,8 +168,8 @@ inline auto handle_complete(std::vector<std::string> &args) -> void {
     }
   }
 }
-inline auto format_and_reap_jobs(bool print_all) -> std::string {
 
+inline auto format_and_reap_jobs(bool print_all) -> std::string {
   std::string output;
 
 #if !defined(_WIN32) && !defined(_WIN64)
@@ -189,10 +189,12 @@ inline auto format_and_reap_jobs(bool print_all) -> std::string {
     }
   }
 #endif
+
   for (size_t i = 0; i < background_jobs.size(); ++i) {
     const auto &job = background_jobs[i];
     if (!print_all && job.status != "Done")
       continue;
+
     std::string status_padded = job.status;
     if (status_padded.length() < 24) {
       status_padded.append(24 - status_padded.length(), ' ');
@@ -211,11 +213,14 @@ inline auto format_and_reap_jobs(bool print_all) -> std::string {
       std::remove_if(background_jobs.begin(), background_jobs.end(),
                      [](const BackgroundJob &j) { return j.status == "Done"; }),
       background_jobs.end());
+
   return output;
 }
+
 inline auto handle_background_jobs(std::vector<std::string> &args) -> void {
   auto redir = extract_redirection(args);
   std::string output = format_and_reap_jobs(true);
+
   if (redir.has_stdout_redirect()) {
     if (redir.stdout_append_mode)
       redirect_output(output, redir.stdout_file, std::ios_base::app);
@@ -230,4 +235,43 @@ inline auto handle_background_jobs(std::vector<std::string> &args) -> void {
     else
       redirect_output("", redir.stderr_file);
   }
+}
+
+inline auto handle_history(std::vector<std::string> &args) -> void {
+  auto redir = extract_redirection(args);
+
+  std::string output;
+  for (size_t i = 0; i < command_history.size(); ++i) {
+    output += std::format("{:>5}  {}\n", i + 1, command_history[i]);
+  }
+
+  if (redir.has_stdout_redirect()) {
+    if (redir.stdout_append_mode)
+      redirect_output(output, redir.stdout_file, std::ios_base::app);
+    else
+      redirect_output(output, redir.stdout_file);
+  } else
+    std::cout << output;
+
+  if (redir.has_stderr_redirect()) {
+    if (redir.stderr_append_mode)
+      redirect_output("", redir.stderr_file, std::ios_base::app);
+    else
+      redirect_output("", redir.stderr_file);
+  }
+}
+
+inline void exec_builtin_for_pipeline(const std::string &cmd,
+                                      std::vector<std::string> &args) {
+
+  if (cmd == "echo")
+    handle_echo(args);
+  else if (cmd == "type")
+    handle_type(args);
+  else if (cmd == "pwd")
+    handle_pwd(args);
+  else if (cmd == "cd")
+    handle_cd(args);
+  else if (cmd == "history")
+    handle_history(args);
 }

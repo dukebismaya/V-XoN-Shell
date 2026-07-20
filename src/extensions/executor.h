@@ -2,6 +2,15 @@
 
 #include "platform.h"
 #include "redirection.h"
+#include <cstdio>
+#include <vector>
+
+inline auto is_builtin(const std::string &cmd) -> bool {
+  return SHELL_BUILTINS.contains(cmd);
+}
+
+inline void exec_builtin_for_pipeline(const std::string &cmd,
+                                      std::vector<std::string> &args);
 
 inline auto find_executable(const std::string &command) -> std::string {
   const auto *path_env = std::getenv("PATH");
@@ -154,11 +163,11 @@ inline auto run_program(const std::string &cmd_name,
   return true;
 }
 
-// Split parsed args at the first "|" token into two command arg lists
 inline auto split_pipeline(const std::vector<std::string> &args)
     -> std::pair<std::vector<std::string>, std::vector<std::string>> {
+
   std::vector<std::string> left, right;
-  bool found_pipe = false;
+  bool found_pipe{false};
   for (const auto &tok : args) {
     if (!found_pipe && tok == "|") {
       found_pipe = true;
@@ -175,29 +184,52 @@ inline auto split_pipeline(const std::vector<std::string> &args)
 inline auto run_pipeline(const std::vector<std::string> &args) -> bool {
 #if !defined(_WIN32) && !defined(_WIN64)
   auto [left_args, right_args] = split_pipeline(args);
-
   if (left_args.empty() || right_args.empty())
     return false;
 
   auto left_redir = extract_redirection(left_args);
   auto right_redir = extract_redirection(right_args);
 
-  std::string left_cmd = left_args[0];
-  std::string right_cmd = right_args[0];
+  auto left_cmd = left_args[0];
+  left_args.erase(left_args.begin());
+  auto right_cmd = right_args[0];
+  right_args.erase(right_args.begin());
 
-  std::string left_exec = find_executable(left_cmd);
-  std::string right_exec = find_executable(right_cmd);
-  if (left_exec.empty() || right_exec.empty())
-    return false;
+  bool left_is_builtin = is_builtin(left_cmd);
+  bool right_is_builtin = is_builtin(right_cmd);
 
+  std::string left_exec, right_exec;
+  if (!left_is_builtin) {
+    left_exec = find_executable(left_cmd);
+    if (left_exec.empty())
+      return false;
+  }
+  if (!right_is_builtin) {
+    right_exec = find_executable(right_cmd);
+    if (right_exec.empty())
+      return false;
+  }
+
+  std::vector<std::string> left_argv_strs, right_argv_strs;
   std::vector<char *> left_argv, right_argv;
-  for (auto &s : left_args)
-    left_argv.push_back(const_cast<char *>(s.c_str()));
-  left_argv.push_back(nullptr);
 
-  for (auto &s : right_args)
-    right_argv.push_back(const_cast<char *>(s.c_str()));
-  right_argv.push_back(nullptr);
+  if (!left_is_builtin) {
+    left_argv_strs.push_back(left_cmd);
+    for (auto &s : left_args)
+      left_argv_strs.push_back(s);
+    for (auto &s : left_argv_strs)
+      left_argv.push_back(s.data());
+    left_argv.push_back(nullptr);
+  }
+
+  if (!right_is_builtin) {
+    right_argv_strs.push_back(right_cmd);
+    for (auto &s : right_args)
+      right_argv_strs.push_back(s);
+    for (auto &s : right_argv_strs)
+      right_argv.push_back(s.data());
+    right_argv.push_back(nullptr);
+  }
 
   int pipefd[2];
   if (pipe(pipefd) < 0)
@@ -209,6 +241,7 @@ inline auto run_pipeline(const std::vector<std::string> &args) -> bool {
     close(pipefd[1]);
     return false;
   }
+
   if (pid1 == 0) {
     close(pipefd[0]);
     dup2(pipefd[1], STDOUT_FILENO);
@@ -220,9 +253,21 @@ inline auto run_pipeline(const std::vector<std::string> &args) -> bool {
       FileDescriptor fd(left_redir.stderr_file, flags, 0644);
       fd.apply_redirect(STDERR_FILENO);
     }
+    if (left_is_builtin) {
+      exec_builtin_for_pipeline(left_cmd, left_args);
+      _exit(0);
+    } else {
+      execvp(left_exec.c_str(), left_argv.data());
+      _exit(1);
+    }
+  }
 
-    execvp(left_exec.c_str(), left_argv.data());
-    std::exit(1);
+  bool right_has_pipe{false};
+  for (const auto &tok : right_args) {
+    if (tok == "|") {
+      right_has_pipe = true;
+      break;
+    }
   }
 
   pid_t pid2 = fork();
@@ -232,10 +277,20 @@ inline auto run_pipeline(const std::vector<std::string> &args) -> bool {
     waitpid(pid1, nullptr, 0);
     return false;
   }
+
   if (pid2 == 0) {
     close(pipefd[1]);
     dup2(pipefd[0], STDIN_FILENO);
     close(pipefd[0]);
+
+    if (right_has_pipe) {
+      std::vector<std::string> remaining;
+      remaining.push_back(right_cmd);
+      for (auto &s : right_args)
+        remaining.push_back(s);
+      run_pipeline(remaining);
+      _exit(0);
+    }
 
     if (right_redir.has_stdout_redirect()) {
       int flags = O_WRONLY | O_CREAT |
@@ -243,6 +298,7 @@ inline auto run_pipeline(const std::vector<std::string> &args) -> bool {
       FileDescriptor fd(right_redir.stdout_file, flags, 0644);
       fd.apply_redirect(STDOUT_FILENO);
     }
+
     if (right_redir.has_stderr_redirect()) {
       int flags = O_WRONLY | O_CREAT |
                   (right_redir.stderr_append_mode ? O_APPEND : O_TRUNC);
@@ -250,8 +306,13 @@ inline auto run_pipeline(const std::vector<std::string> &args) -> bool {
       fd.apply_redirect(STDERR_FILENO);
     }
 
-    execvp(right_exec.c_str(), right_argv.data());
-    std::exit(1);
+    if (right_is_builtin) {
+      exec_builtin_for_pipeline(right_cmd, right_args);
+      _exit(0);
+    } else {
+      execvp(right_exec.c_str(), right_argv.data());
+      _exit(1);
+    }
   }
 
   close(pipefd[0]);
