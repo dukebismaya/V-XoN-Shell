@@ -35,6 +35,8 @@ int main() {
     if (args.empty())
       continue;
 
+    command_history.push_back(raw_command);
+
     bool has_pipe = false;
     for (const auto &a : args) {
       if (a == "|") {
@@ -85,6 +87,10 @@ int main() {
     }
     if (cmd == "jobs") {
       handle_background_jobs(args);
+      continue;
+    }
+    if (cmd == "history") {
+      handle_history(args);
       continue;
     }
 
