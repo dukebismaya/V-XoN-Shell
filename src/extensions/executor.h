@@ -172,6 +172,13 @@ inline auto split_pipeline(const std::vector<std::string> &args)
   return {left, right};
 }
 
+inline auto is_builtin(const std::string &cmd) -> bool {
+  return SHELL_BUILTINS.contains(cmd);
+}
+
+inline void exec_builtin_for_pipeline(const std::string &cmd,
+                                      std::vector<std::string> &args);
+
 inline auto run_pipeline(const std::vector<std::string> &args) -> bool {
 #if !defined(_WIN32) && !defined(_WIN64)
   auto [left_args, right_args] = split_pipeline(args);
@@ -183,26 +190,53 @@ inline auto run_pipeline(const std::vector<std::string> &args) -> bool {
   auto right_redir = extract_redirection(right_args);
 
   std::string left_cmd = left_args[0];
+  left_args.erase(left_args.begin());
+
   std::string right_cmd = right_args[0];
+  right_args.erase(right_args.begin());
 
-  std::string left_exec = find_executable(left_cmd);
-  std::string right_exec = find_executable(right_cmd);
-  if (left_exec.empty() || right_exec.empty())
-    return false;
+  bool left_is_builtin = is_builtin(left_cmd);
+  bool right_is_builtin = is_builtin(right_cmd);
 
+  std::string left_exec, right_exec;
+
+  if (!left_is_builtin) {
+    left_exec = find_executable(left_cmd);
+    if (left_exec.empty())
+      return false;
+  }
+  if (!right_is_builtin) {
+    right_exec = find_executable(right_cmd);
+    if (right_exec.empty())
+      return false;
+  }
+
+  std::vector<std::string> left_argv_strs, right_argv_strs;
   std::vector<char *> left_argv, right_argv;
-  for (auto &s : left_args)
-    left_argv.push_back(const_cast<char *>(s.c_str()));
-  left_argv.push_back(nullptr);
 
-  for (auto &s : right_args)
-    right_argv.push_back(const_cast<char *>(s.c_str()));
-  right_argv.push_back(nullptr);
+  if (!left_is_builtin) {
+    left_argv_strs.push_back(left_cmd);
+    for (auto &s : left_args)
+      left_argv_strs.push_back(s);
+    for (auto &s : left_argv_strs)
+      left_argv.push_back(s.data());
+    left_argv.push_back(nullptr);
+  }
+
+  if (!right_is_builtin) {
+    right_argv_strs.push_back(right_cmd);
+    for (auto &s : right_args)
+      right_argv_strs.push_back(s);
+    for (auto &s : right_argv_strs)
+      right_argv.push_back(s.data());
+    right_argv.push_back(nullptr);
+  }
 
   int pipefd[2];
   if (pipe(pipefd) < 0)
     return false;
 
+  // Left side of the pipe
   pid_t pid1 = fork();
   if (pid1 < 0) {
     close(pipefd[0]);
@@ -221,8 +255,23 @@ inline auto run_pipeline(const std::vector<std::string> &args) -> bool {
       fd.apply_redirect(STDERR_FILENO);
     }
 
-    execvp(left_exec.c_str(), left_argv.data());
-    std::exit(1);
+    if (left_is_builtin) {
+      exec_builtin_for_pipeline(left_cmd, left_args);
+      _exit(0);
+    } else {
+      execvp(left_exec.c_str(), left_argv.data());
+      _exit(1);
+    }
+  }
+
+  // Right side of the pipe
+  // Check if right side itself contains more pipes (multi-stage pipeline)
+  bool right_has_pipe = false;
+  for (const auto &tok : right_args) {
+    if (tok == "|") {
+      right_has_pipe = true;
+      break;
+    }
   }
 
   pid_t pid2 = fork();
@@ -237,6 +286,15 @@ inline auto run_pipeline(const std::vector<std::string> &args) -> bool {
     dup2(pipefd[0], STDIN_FILENO);
     close(pipefd[0]);
 
+    if (right_has_pipe) {
+      std::vector<std::string> remaining;
+      remaining.push_back(right_cmd);
+      for (auto &s : right_args)
+        remaining.push_back(s);
+      run_pipeline(remaining);
+      _exit(0);
+    }
+
     if (right_redir.has_stdout_redirect()) {
       int flags = O_WRONLY | O_CREAT |
                   (right_redir.stdout_append_mode ? O_APPEND : O_TRUNC);
@@ -250,8 +308,13 @@ inline auto run_pipeline(const std::vector<std::string> &args) -> bool {
       fd.apply_redirect(STDERR_FILENO);
     }
 
-    execvp(right_exec.c_str(), right_argv.data());
-    std::exit(1);
+    if (right_is_builtin) {
+      exec_builtin_for_pipeline(right_cmd, right_args);
+      _exit(0);
+    } else {
+      execvp(right_exec.c_str(), right_argv.data());
+      _exit(1);
+    }
   }
 
   close(pipefd[0]);

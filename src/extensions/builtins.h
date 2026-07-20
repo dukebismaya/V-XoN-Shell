@@ -231,3 +231,15 @@ inline auto handle_background_jobs(std::vector<std::string> &args) -> void {
       redirect_output("", redir.stderr_file);
   }
 }
+
+inline void exec_builtin_for_pipeline(const std::string &cmd,
+                                      std::vector<std::string> &args) {
+  if (cmd == "echo")
+    handle_echo(args);
+  else if (cmd == "type")
+    handle_type(args);
+  else if (cmd == "pwd")
+    handle_pwd(args);
+  else if (cmd == "cd")
+    handle_cd(args);
+}
