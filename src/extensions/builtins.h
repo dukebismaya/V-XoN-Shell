@@ -46,7 +46,7 @@ inline auto handle_type(std::vector<std::string> &args) -> void {
   const auto &cmd = args[0];
   std::string output;
 
-  if (SHELL_BUILTINS.contains(cmd)) {
+  if (is_builtin(cmd)) {
     output = std::format("{} is a shell builtin", cmd);
   } else {
     std::string exec_path = find_executable(cmd);
@@ -168,6 +168,7 @@ inline auto handle_complete(std::vector<std::string> &args) -> void {
     }
   }
 }
+
 inline auto format_and_reap_jobs(bool print_all) -> std::string {
 
   std::string output;
@@ -213,6 +214,7 @@ inline auto format_and_reap_jobs(bool print_all) -> std::string {
       background_jobs.end());
   return output;
 }
+
 inline auto handle_background_jobs(std::vector<std::string> &args) -> void {
   auto redir = extract_redirection(args);
   std::string output = format_and_reap_jobs(true);

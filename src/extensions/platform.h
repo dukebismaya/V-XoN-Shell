@@ -27,15 +27,15 @@ inline const char *USER_NAME = std::getenv("USER");
 #endif
 
 struct BackgroundJob {
-    int id;
-    int pid;
-    std::string command;
-    std::string status;
+  int id;
+  int pid;
+  std::string command;
+  std::string status;
 };
 
 inline std::vector<BackgroundJob> background_jobs;
 
 inline const std::unordered_set<std::string> SHELL_BUILTINS{
-    "cd", "complete", "echo", "exit", "jobs", "pwd", "type"};
+    "cd", "complete", "echo", "exit", "history", "jobs", "pwd", "type"};
 
 inline std::unordered_map<std::string, std::string> register_completion;
