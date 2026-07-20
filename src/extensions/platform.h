@@ -39,3 +39,5 @@ inline const std::unordered_set<std::string> SHELL_BUILTINS{
     "cd", "complete", "echo", "exit", "history", "jobs", "pwd", "type"};
 
 inline std::unordered_map<std::string, std::string> register_completion;
+
+inline std::vector<std::string> command_history;
