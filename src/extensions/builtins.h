@@ -240,8 +240,20 @@ inline auto handle_background_jobs(std::vector<std::string> &args) -> void {
 inline auto handle_history(std::vector<std::string> &args) -> void {
   auto redir = extract_redirection(args);
 
+  size_t total = command_history.size();
+  size_t start = 0;
+
+  if (!args.empty()) {
+    try {
+      size_t n = std::stoul(args[0]);
+      if (n < total)
+        start = total - n;
+    } catch (...) {
+    }
+  }
+
   std::string output;
-  for (size_t i = 0; i < command_history.size(); ++i) {
+  for (size_t i = start; i < total; ++i) {
     output += std::format("{:>5}  {}\n", i + 1, command_history[i]);
   }
 
