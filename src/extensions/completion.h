@@ -213,18 +213,32 @@ inline auto readline_raw(const std::string &prompt, RawMode & /*raw*/)
   std::cout << prompt << std::flush;
 
   std::string buf;
+  size_t cursor_pos = 0; // cursor position within buf
   bool tab_pressed = false;
 
   // History navigation state
   int history_index = static_cast<int>(command_history.size());
-  std::string saved_input; // saves the in-progress line when navigating
+  std::string saved_input;
 
-  // Helper lambda: clear current line on terminal and redraw with new content
+  // redraw from cursor to end of buf, then reposition cursor
+  auto redraw_from_cursor = [&]() {
+    std::cout << buf.substr(cursor_pos);
+    for (size_t i = cursor_pos; i < buf.size(); ++i)
+      std::cout << '\b';
+    std::cout << std::flush;
+  };
+
+  // clear current line on terminal and redraw with new content
   auto replace_line = [&](const std::string &new_buf) {
-    // Erase the current buffer from the terminal
+    for (size_t i = 0; i < cursor_pos; ++i)
+      std::cout << '\b';
+    // Overwrite with spaces to clear old content
     for (size_t i = 0; i < buf.size(); ++i)
-      std::cout << "\b \b";
+      std::cout << ' ';
+    for (size_t i = 0; i < buf.size(); ++i)
+      std::cout << '\b';
     buf = new_buf;
+    cursor_pos = buf.size();
     std::cout << buf << std::flush;
   };
 
@@ -235,7 +249,7 @@ inline auto readline_raw(const std::string &prompt, RawMode & /*raw*/)
     if (ch == 255 || ch == EOF)
       return std::nullopt; // EOF / error
     if (ch == 0 || ch == 224) {
-      int key = _getch(); // consume extended key code
+      int key = _getch();
       if (key == 72) {
         // Up arrow
         if (history_index > 0) {
@@ -252,6 +266,18 @@ inline auto readline_raw(const std::string &prompt, RawMode & /*raw*/)
             replace_line(saved_input);
           else
             replace_line(command_history[history_index]);
+        }
+      } else if (key == 77) {
+        // Right arrow
+        if (cursor_pos < buf.size()) {
+          std::cout << buf[cursor_pos] << std::flush;
+          ++cursor_pos;
+        }
+      } else if (key == 75) {
+        // Left arrow
+        if (cursor_pos > 0) {
+          std::cout << '\b' << std::flush;
+          --cursor_pos;
         }
       }
       continue;
@@ -288,8 +314,19 @@ inline auto readline_raw(const std::string &prompt, RawMode & /*raw*/)
             else
               replace_line(command_history[history_index]);
           }
+        } else if (seq[1] == 'C') {
+          // Right arrow
+          if (cursor_pos < buf.size()) {
+            std::cout << buf[cursor_pos] << std::flush;
+            ++cursor_pos;
+          }
+        } else if (seq[1] == 'D') {
+          // Left arrow
+          if (cursor_pos > 0) {
+            std::cout << '\b' << std::flush;
+            --cursor_pos;
+          }
         }
-        // C = right, D = left — ignore for now
       }
       continue;
     }
@@ -429,10 +466,16 @@ inline auto readline_raw(const std::string &prompt, RawMode & /*raw*/)
 
     } else if (c == 127 || c == '\b') {
       // Backspace / DEL
-      if (!buf.empty()) {
-        buf.pop_back();
-        // Erase the last character on the terminal
-        std::cout << "\b \b" << std::flush;
+      if (cursor_pos > 0) {
+        buf.erase(cursor_pos - 1, 1);
+        --cursor_pos;
+        // Move back one, redraw from cursor, overwrite trailing char with space
+        std::cout << '\b';
+        std::cout << buf.substr(cursor_pos) << ' ';
+        // Move cursor back to correct position
+        for (size_t i = cursor_pos; i < buf.size() + 1; ++i)
+          std::cout << '\b';
+        std::cout << std::flush;
       }
       tab_pressed = false;
 
@@ -450,9 +493,14 @@ inline auto readline_raw(const std::string &prompt, RawMode & /*raw*/)
       // Ctrl-D mid-line: ignore
 
     } else if (c >= 32) {
-      // Printable character
-      buf += c;
-      std::cout << c << std::flush;
+      // Printable character — insert at cursor position
+      buf.insert(cursor_pos, 1, c);
+      ++cursor_pos;
+      // Print from the inserted char onward, then reposition cursor
+      std::cout << buf.substr(cursor_pos - 1);
+      for (size_t i = cursor_pos; i < buf.size(); ++i)
+        std::cout << '\b';
+      std::cout << std::flush;
       tab_pressed = false;
     }
     // Everything else (arrow keys send escape sequences, etc.) is ignored
