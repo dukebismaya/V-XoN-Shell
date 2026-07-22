@@ -215,6 +215,19 @@ inline auto readline_raw(const std::string &prompt, RawMode & /*raw*/)
   std::string buf;
   bool tab_pressed = false;
 
+  // History navigation state
+  int history_index = static_cast<int>(command_history.size());
+  std::string saved_input; // saves the in-progress line when navigating
+
+  // Helper lambda: clear current line on terminal and redraw with new content
+  auto replace_line = [&](const std::string &new_buf) {
+    // Erase the current buffer from the terminal
+    for (size_t i = 0; i < buf.size(); ++i)
+      std::cout << "\b \b";
+    buf = new_buf;
+    std::cout << buf << std::flush;
+  };
+
   while (true) {
     char c{};
 #if defined(_WIN32) || defined(_WIN64)
@@ -222,7 +235,25 @@ inline auto readline_raw(const std::string &prompt, RawMode & /*raw*/)
     if (ch == 255 || ch == EOF)
       return std::nullopt; // EOF / error
     if (ch == 0 || ch == 224) {
-      _getch(); // consume extended key
+      int key = _getch(); // consume extended key code
+      if (key == 72) {
+        // Up arrow
+        if (history_index > 0) {
+          if (history_index == static_cast<int>(command_history.size()))
+            saved_input = buf;
+          --history_index;
+          replace_line(command_history[history_index]);
+        }
+      } else if (key == 80) {
+        // Down arrow
+        if (history_index < static_cast<int>(command_history.size())) {
+          ++history_index;
+          if (history_index == static_cast<int>(command_history.size()))
+            replace_line(saved_input);
+          else
+            replace_line(command_history[history_index]);
+        }
+      }
       continue;
     }
     c = static_cast<char>(ch);
@@ -230,6 +261,38 @@ inline auto readline_raw(const std::string &prompt, RawMode & /*raw*/)
     ssize_t n = ::read(STDIN_FILENO, &c, 1);
     if (n <= 0)
       return std::nullopt; // EOF / error
+
+    // Detect escape sequences (arrow keys: ESC [ A/B/C/D)
+    if (c == '\x1b') {
+      char seq[2]{};
+      // Read next two bytes of the escape sequence
+      if (::read(STDIN_FILENO, &seq[0], 1) <= 0)
+        continue;
+      if (seq[0] == '[') {
+        if (::read(STDIN_FILENO, &seq[1], 1) <= 0)
+          continue;
+        if (seq[1] == 'A') {
+          // Up arrow
+          if (history_index > 0) {
+            if (history_index == static_cast<int>(command_history.size()))
+              saved_input = buf;
+            --history_index;
+            replace_line(command_history[history_index]);
+          }
+        } else if (seq[1] == 'B') {
+          // Down arrow
+          if (history_index < static_cast<int>(command_history.size())) {
+            ++history_index;
+            if (history_index == static_cast<int>(command_history.size()))
+              replace_line(saved_input);
+            else
+              replace_line(command_history[history_index]);
+          }
+        }
+        // C = right, D = left — ignore for now
+      }
+      continue;
+    }
 #endif
 
     if (c == '\t') {
