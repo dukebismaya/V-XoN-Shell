@@ -240,13 +240,25 @@ inline auto handle_background_jobs(std::vector<std::string> &args) -> void {
 inline auto handle_history(std::vector<std::string> &args) -> void {
   auto redir = extract_redirection(args);
 
-  if (args.size() >= 2 && args[0] == "-r") {
-    std::ifstream history_file{args[1]};
-    if (history_file.is_open()) {
-      std::string line{};
-      while (std::getline(history_file, line)) {
-        if (!line.empty())
-          command_history.push_back(line);
+  // Read & write from history file
+
+  if (args.size() >= 2 && (args[0] == "-r" || args[0] == "-w")) {
+
+    if (args[0] == "-r") {
+      std::ifstream history_file{args[1]};
+      if (history_file.is_open()) {
+        std::string line{};
+        while (std::getline(history_file, line)) {
+          if (!line.empty())
+            command_history.push_back(line);
+        }
+      }
+    } else if (args[0] == "-w") {
+      std::ofstream history_file{args[1]};
+      if (history_file.is_open()) {
+        for (const auto &line : command_history) {
+          history_file << line << "\n";
+        }
       }
     }
     args.erase(args.begin(), args.begin() + 2);
