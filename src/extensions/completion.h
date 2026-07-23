@@ -28,7 +28,7 @@ public:
   RawMode() {
     if (tcgetattr(STDIN_FILENO, &saved_) == 0) {
       struct ::termios raw = saved_;
-      raw.c_lflag &= ~(ECHO | ICANON);
+      raw.c_lflag &= ~(ECHO | ICANON | ISIG);
       raw.c_cc[VMIN] = 1;
       raw.c_cc[VTIME] = 0;
       if (tcsetattr(STDIN_FILENO, TCSANOW, &raw) == 0) {
@@ -483,6 +483,11 @@ inline auto readline_raw(const std::string &prompt, RawMode & /*raw*/)
       // Enter: accept line
       std::cout << '\n' << std::flush;
       return buf;
+
+    } else if (c == 3) {
+      // Ctrl-C: print ^C, discard current line, return empty for fresh prompt
+      std::cout << "^C\n" << std::flush;
+      return std::string{};
 
     } else if (c == 4) {
       // Ctrl-D on empty input: EOF
