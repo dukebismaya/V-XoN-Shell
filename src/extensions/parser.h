@@ -1,7 +1,6 @@
 #pragma once
 
 #include "platform.h"
-#include <unordered_set>
 
 // escapable characters
 inline const std::unordered_set<char> ESCAPABLE_CHARS{'"', '\\', '\n', '$',

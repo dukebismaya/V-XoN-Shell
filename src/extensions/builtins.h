@@ -240,6 +240,42 @@ inline auto handle_background_jobs(std::vector<std::string> &args) -> void {
 inline auto handle_history(std::vector<std::string> &args) -> void {
   auto redir = extract_redirection(args);
 
+  // Read, write & append history file
+
+  if (args.size() >= 2 &&
+      (args[0] == "-r" || args[0] == "-w" || args[0] == "-a")) {
+
+    if (args[0] == "-r") {
+      std::ifstream history_file{args[1]};
+      if (history_file.is_open()) {
+        std::string line{};
+        while (std::getline(history_file, line)) {
+          if (!line.empty())
+            command_history.push_back(line);
+        }
+      }
+    } else if (args[0] == "-w") {
+      std::ofstream history_file{args[1]};
+      if (history_file.is_open()) {
+        for (const auto &line : command_history) {
+          history_file << line << "\n";
+        }
+      }
+      track_history_append_index = command_history.size();
+    } else if (args[0] == "-a") {
+      std::ofstream history_file{args[1], std::ios_base::app};
+      if (history_file.is_open()) {
+        for (size_t i = track_history_append_index; i < command_history.size();
+             ++i) {
+          history_file << command_history[i] << "\n";
+        }
+      }
+      track_history_append_index = command_history.size();
+    }
+    args.erase(args.begin(), args.begin() + 2);
+    return;
+  }
+
   size_t total = command_history.size();
   size_t start = 0;
 

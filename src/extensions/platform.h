@@ -41,3 +41,4 @@ inline const std::unordered_set<std::string> SHELL_BUILTINS{
 inline std::unordered_map<std::string, std::string> register_completion;
 
 inline std::vector<std::string> command_history;
+inline size_t track_history_append_index = 0;

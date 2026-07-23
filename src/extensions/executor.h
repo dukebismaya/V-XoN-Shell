@@ -3,7 +3,6 @@
 #include "platform.h"
 #include "redirection.h"
 #include <cstdio>
-#include <vector>
 
 inline auto is_builtin(const std::string &cmd) -> bool {
   return SHELL_BUILTINS.contains(cmd);
