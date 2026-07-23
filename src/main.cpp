@@ -3,6 +3,8 @@
 
 #include "extensions/completion.h"
 #include "extensions/platform.h"
+#include <fstream>
+#include <string>
 
 static std::string make_prompt() {
   auto cwd = std::filesystem::current_path().string();
@@ -15,6 +17,19 @@ int main() {
   std::cerr << std::unitbuf;
 
   RawMode raw;
+
+  if (HISTORY_FILE) {
+    std::ifstream hist_file{HISTORY_FILE};
+    if (hist_file.is_open()) {
+      std::string line{};
+      while (std::getline(hist_file, line)) {
+        if (!line.empty()) {
+          command_history.push_back(line);
+        }
+      }
+      track_history_append_index = command_history.size();
+    }
+  }
 
   while (true) {
     std::string raw_command;
@@ -63,7 +78,7 @@ int main() {
 
     if (cmd == "exit") {
       raw.restore();
-      std::exit(0);
+      break;
     }
     if (cmd == "echo") {
       handle_echo(args);
@@ -96,6 +111,15 @@ int main() {
 
     if (!run_program(cmd, args, run_in_background))
       std::cout << std::format("{}: command not found\n", cmd);
+  }
+
+  if (HISTORY_FILE) {
+    std::ofstream out_hist_file{HISTORY_FILE};
+    if (out_hist_file.is_open()) {
+      for (const auto &line : command_history) {
+        out_hist_file << line << "\n";
+      }
+    }
   }
 
   return 0;
