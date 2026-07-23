@@ -240,9 +240,10 @@ inline auto handle_background_jobs(std::vector<std::string> &args) -> void {
 inline auto handle_history(std::vector<std::string> &args) -> void {
   auto redir = extract_redirection(args);
 
-  // Read & write from history file
+  // Read, write & append history file
 
-  if (args.size() >= 2 && (args[0] == "-r" || args[0] == "-w")) {
+  if (args.size() >= 2 &&
+      (args[0] == "-r" || args[0] == "-w" || args[0] == "-a")) {
 
     if (args[0] == "-r") {
       std::ifstream history_file{args[1]};
@@ -260,6 +261,16 @@ inline auto handle_history(std::vector<std::string> &args) -> void {
           history_file << line << "\n";
         }
       }
+      track_history_append_index = command_history.size();
+    } else if (args[0] == "-a") {
+      std::ofstream history_file{args[1], std::ios_base::app};
+      if (history_file.is_open()) {
+        for (size_t i = track_history_append_index; i < command_history.size();
+             ++i) {
+          history_file << command_history[i] << "\n";
+        }
+      }
+      track_history_append_index = command_history.size();
     }
     args.erase(args.begin(), args.begin() + 2);
     return;
