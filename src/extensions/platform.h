@@ -26,6 +26,8 @@ inline const char *HOME_DIR = std::getenv("HOME");
 inline const char *USER_NAME = std::getenv("USER");
 #endif
 
+inline const char *HISTORY_FILE = std::getenv("HISTFILE");
+
 struct BackgroundJob {
   int id;
   int pid;
