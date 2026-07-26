@@ -309,6 +309,41 @@ inline auto handle_history(std::vector<std::string> &args) -> void {
   }
 }
 
+inline auto handle_declare(std::vector<std::string> &args) -> void {
+  auto redir = extract_redirection(args);
+  if (args.empty()) {
+    std::cout << "declare: missing argument\n";
+    return;
+  }
+  std::string output;
+  // -p;
+  auto find_p_arg = std::find(args.begin(), args.end(), "-p");
+  if (find_p_arg != args.end() && std::next(find_p_arg) != args.end()) {
+    output = "declare: " + *std::next(find_p_arg) + ": not found";
+  }
+
+  if (redir.has_stdout_redirect()) {
+    std::string to_write = output.empty() ? "" : (output + "\n");
+    if (redir.stdout_append_mode) {
+      redirect_output(to_write, redir.stdout_file, std::ios_base::app);
+    } else {
+      redirect_output(to_write, redir.stdout_file);
+    }
+  } else {
+    if (!output.empty()) {
+      std::cout << output << "\n";
+    }
+  }
+
+  if (redir.has_stderr_redirect()) {
+    if (redir.stderr_append_mode) {
+      redirect_output("", redir.stderr_file, std::ios_base::app);
+    } else {
+      redirect_output("", redir.stderr_file);
+    }
+  }
+}
+
 inline void exec_builtin_for_pipeline(const std::string &cmd,
                                       std::vector<std::string> &args) {
 

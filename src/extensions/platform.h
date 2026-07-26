@@ -38,7 +38,8 @@ struct BackgroundJob {
 inline std::vector<BackgroundJob> background_jobs;
 
 inline const std::unordered_set<std::string> SHELL_BUILTINS{
-    "cd", "complete", "echo", "exit", "history", "jobs", "pwd", "type"};
+    "cd",      "complete", "declare", "echo", "exit",
+    "history", "jobs",     "pwd",     "type"};
 
 inline std::unordered_map<std::string, std::string> register_completion;
 
