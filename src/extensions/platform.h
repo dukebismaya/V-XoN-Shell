@@ -38,9 +38,12 @@ struct BackgroundJob {
 inline std::vector<BackgroundJob> background_jobs;
 
 inline const std::unordered_set<std::string> SHELL_BUILTINS{
-    "cd", "complete", "echo", "exit", "history", "jobs", "pwd", "type"};
+    "cd",      "complete", "declare", "echo", "exit",
+    "history", "jobs",     "pwd",     "type"};
 
 inline std::unordered_map<std::string, std::string> register_completion;
 
 inline std::vector<std::string> command_history;
 inline size_t track_history_append_index = 0;
+
+inline std::unordered_map<std::string, std::string> shell_variables;

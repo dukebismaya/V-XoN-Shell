@@ -80,6 +80,12 @@ int main() {
       raw.restore();
       break;
     }
+
+    if (cmd == "declare") {
+      handle_declare(args);
+      continue;
+    }
+
     if (cmd == "echo") {
       handle_echo(args);
       continue;

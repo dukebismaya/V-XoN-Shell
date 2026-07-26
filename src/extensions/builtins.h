@@ -309,6 +309,57 @@ inline auto handle_history(std::vector<std::string> &args) -> void {
   }
 }
 
+inline auto handle_declare(std::vector<std::string> &args) -> void {
+  auto redir = extract_redirection(args);
+  if (args.empty()) {
+    return;
+  }
+
+  std::string output;
+
+  if (args[0] == "-p" && args.size() >= 2) {
+    // declare -p NAME — print variable
+    const auto &name = args[1];
+    auto it = shell_variables.find(name);
+    if (it != shell_variables.end()) {
+      output = std::format("declare -- {}=\"{}\"", it->first, it->second);
+    } else {
+      output = std::format("declare: {}: not found", name);
+    }
+  } else {
+    // declare NAME=VALUE — set variable
+    for (const auto &arg : args) {
+      auto eq = arg.find('=');
+      if (eq != std::string::npos) {
+        std::string name = arg.substr(0, eq);
+        std::string value = arg.substr(eq + 1);
+        shell_variables[name] = value;
+      }
+    }
+  }
+
+  if (redir.has_stdout_redirect()) {
+    std::string to_write = output.empty() ? "" : (output + "\n");
+    if (redir.stdout_append_mode) {
+      redirect_output(to_write, redir.stdout_file, std::ios_base::app);
+    } else {
+      redirect_output(to_write, redir.stdout_file);
+    }
+  } else {
+    if (!output.empty()) {
+      std::cout << output << "\n";
+    }
+  }
+
+  if (redir.has_stderr_redirect()) {
+    if (redir.stderr_append_mode) {
+      redirect_output("", redir.stderr_file, std::ios_base::app);
+    } else {
+      redirect_output("", redir.stderr_file);
+    }
+  }
+}
+
 inline void exec_builtin_for_pipeline(const std::string &cmd,
                                       std::vector<std::string> &args) {
 
