@@ -312,14 +312,30 @@ inline auto handle_history(std::vector<std::string> &args) -> void {
 inline auto handle_declare(std::vector<std::string> &args) -> void {
   auto redir = extract_redirection(args);
   if (args.empty()) {
-    std::cout << "declare: missing argument\n";
     return;
   }
+
   std::string output;
-  // -p;
-  auto find_p_arg = std::find(args.begin(), args.end(), "-p");
-  if (find_p_arg != args.end() && std::next(find_p_arg) != args.end()) {
-    output = "declare: " + *std::next(find_p_arg) + ": not found";
+
+  if (args[0] == "-p" && args.size() >= 2) {
+    // declare -p NAME — print variable
+    const auto &name = args[1];
+    auto it = shell_variables.find(name);
+    if (it != shell_variables.end()) {
+      output = std::format("declare -- {}=\"{}\"", it->first, it->second);
+    } else {
+      output = std::format("declare: {}: not found", name);
+    }
+  } else {
+    // declare NAME=VALUE — set variable
+    for (const auto &arg : args) {
+      auto eq = arg.find('=');
+      if (eq != std::string::npos) {
+        std::string name = arg.substr(0, eq);
+        std::string value = arg.substr(eq + 1);
+        shell_variables[name] = value;
+      }
+    }
   }
 
   if (redir.has_stdout_redirect()) {
