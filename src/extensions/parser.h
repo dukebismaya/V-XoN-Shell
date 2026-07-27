@@ -40,7 +40,7 @@ inline auto parse_args(const std::string &raw_command)
       if (k < raw_command.length() &&
           (std::isalpha(static_cast<unsigned char>(raw_command[k])) ||
            raw_command[k] == '_')) {
-        std::string var_name;
+        std::string var_name{};
         var_name += raw_command[k++];
         while (k < raw_command.length() &&
                (std::isalnum(static_cast<unsigned char>(raw_command[k])) ||
@@ -51,10 +51,12 @@ inline auto parse_args(const std::string &raw_command)
         if (!has_brace || (k < raw_command.length() && raw_command[k] == '}')) {
           auto it = shell_variables.find(var_name);
           if (it != shell_variables.end()) {
-            curr_arg += it->second;
+            if (!it->second.empty()) {
+              has_chars = true;
+              curr_arg += it->second;
+            }
           }
           i = has_brace ? k : k - 1;
-          has_chars = true;
         } else {
           // Missing closing brace, treat $ as literal
           curr_arg += c;
