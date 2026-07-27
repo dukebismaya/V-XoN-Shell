@@ -32,9 +32,30 @@ inline auto parse_args(const std::string &raw_command)
         curr_arg += raw_command[++i];
       }
       has_chars = true;
-    }
-
-    else if (c == '"' && !in_single_quote) {
+    } else if (c == '$' && !in_single_quote) {
+      size_t j = i + 1;
+      if (j < raw_command.length() &&
+          (std::isalpha(static_cast<unsigned char>(raw_command[j])) ||
+           raw_command[j] == '_')) {
+        std::string var_name;
+        var_name += raw_command[j++];
+        while (j < raw_command.length() &&
+               (std::isalnum(static_cast<unsigned char>(raw_command[j])) ||
+                raw_command[j] == '_')) {
+          var_name += raw_command[j++];
+        }
+        auto it = shell_variables.find(var_name);
+        if (it != shell_variables.end()) {
+          curr_arg += it->second;
+        }
+        i = j - 1;
+        has_chars = true;
+      } else {
+        // If not a valid identifier, just treat $ as literal
+        curr_arg += c;
+        has_chars = true;
+      }
+    } else if (c == '"' && !in_single_quote) {
       in_double_quote = !in_double_quote;
       has_chars = true;
     }
