@@ -32,9 +32,42 @@ inline auto parse_args(const std::string &raw_command)
         curr_arg += raw_command[++i];
       }
       has_chars = true;
-    }
+    } else if (c == '$' && !in_single_quote) {
+      size_t j = i + 1;
+      bool has_brace = (j < raw_command.length() && raw_command[j] == '{');
+      size_t k = has_brace ? j + 1 : j;
 
-    else if (c == '"' && !in_single_quote) {
+      if (k < raw_command.length() &&
+          (std::isalpha(static_cast<unsigned char>(raw_command[k])) ||
+           raw_command[k] == '_')) {
+        std::string var_name{};
+        var_name += raw_command[k++];
+        while (k < raw_command.length() &&
+               (std::isalnum(static_cast<unsigned char>(raw_command[k])) ||
+                raw_command[k] == '_')) {
+          var_name += raw_command[k++];
+        }
+
+        if (!has_brace || (k < raw_command.length() && raw_command[k] == '}')) {
+          auto it = shell_variables.find(var_name);
+          if (it != shell_variables.end()) {
+            if (!it->second.empty()) {
+              has_chars = true;
+              curr_arg += it->second;
+            }
+          }
+          i = has_brace ? k : k - 1;
+        } else {
+          // Missing closing brace, treat $ as literal
+          curr_arg += c;
+          has_chars = true;
+        }
+      } else {
+        // No valid identifier, treat $ as literal
+        curr_arg += c;
+        has_chars = true;
+      }
+    } else if (c == '"' && !in_single_quote) {
       in_double_quote = !in_double_quote;
       has_chars = true;
     }

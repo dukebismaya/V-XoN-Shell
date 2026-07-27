@@ -328,12 +328,32 @@ inline auto handle_declare(std::vector<std::string> &args) -> void {
     }
   } else {
     // declare NAME=VALUE — set variable
+    auto is_valid_identifier = [](const std::string &name) {
+      if (name.empty())
+        return false;
+      if (!std::isalpha(static_cast<unsigned char>(name[0])) && name[0] != '_')
+        return false;
+      for (size_t i = 1; i < name.length(); ++i) {
+        if (!std::isalnum(static_cast<unsigned char>(name[i])) &&
+            name[i] != '_')
+          return false;
+      }
+      return true;
+    };
+
     for (const auto &arg : args) {
       auto eq = arg.find('=');
-      if (eq != std::string::npos) {
-        std::string name = arg.substr(0, eq);
-        std::string value = arg.substr(eq + 1);
-        shell_variables[name] = value;
+      std::string name = (eq != std::string::npos) ? arg.substr(0, eq) : arg;
+
+      if (is_valid_identifier(name)) {
+        if (eq != std::string::npos) {
+          std::string value = arg.substr(eq + 1);
+          shell_variables[name] = value;
+        }
+      } else {
+        if (!output.empty())
+          output += "\n";
+        output += std::format("declare: `{}': not a valid identifier", arg);
       }
     }
   }
